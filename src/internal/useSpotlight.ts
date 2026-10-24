@@ -13,7 +13,7 @@ export function useSpotlight<T extends HTMLElement>(
   const controller = useRef<Controller | null>(null);
   const latest = useRef(options);
   latest.current = options;
-  const { disabled, focus, keyboard, pulse } = options;
+  const { disabled = false, focus = true, keyboard = true, pulse = true } = options;
 
   const ref = useCallback((node: T | null) => {
     if (!node) return;
