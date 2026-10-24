@@ -81,6 +81,8 @@ export type SidebarProps = {
   feedbackLabel?: string;
   onFeedback?: ClickHandler;
   defaultCollapsed?: boolean;
+  /** Class on the phone menu launcher wrapper, e.g. for an app's view transition. */
+  mobileLauncherClassName?: string;
   className?: string;
 };
 
@@ -121,6 +123,7 @@ export function Sidebar({
   feedbackLabel = '',
   onFeedback,
   defaultCollapsed = false,
+  mobileLauncherClassName,
   className,
 }: SidebarProps) {
   const allMessages = useUiMessages();
@@ -199,7 +202,7 @@ export function Sidebar({
 
   return (
     <>
-      <div className={styles['mobile-launcher']}>
+      <div className={cx(styles['mobile-launcher'], mobileLauncherClassName)}>
         <IconButton label={messages.open} variant="secondary" onClick={() => setIsMobileOpen(true)}>
           <PanelLeftOpen size={17} strokeWidth={1.8} />
         </IconButton>

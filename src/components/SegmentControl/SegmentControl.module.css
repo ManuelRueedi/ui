@@ -104,6 +104,15 @@
   --spot-r-max: 140px;
 }
 
+.prefix {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  margin-right: var(--space-1);
+  vertical-align: -3px;
+}
+
 .label-text {
   position: relative;
   white-space: nowrap;

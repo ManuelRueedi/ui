@@ -1,3 +1,4 @@
+import compatibility from '../../stories/compatibility.module.css';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { darkA11y, staticStory } from '../../stories/storyHelpers';
@@ -98,4 +99,50 @@ export const DarkMode: Story = {
   name: 'A11y / Dark mode',
   ...darkA11y,
   render: () => <Sections />,
+};
+
+export const HeadingAndPanelHooks: Story = {
+  name: 'Heading target and responsive panel',
+  tags: ['!dev', '!autodocs'],
+  parameters: staticStory,
+  render: () => (
+    <div className="story-stack">
+      {[720, 420].map((width) => (
+        <div key={width} className={compatibility.container} style={{ width }}>
+          <Collapsible
+            title={'Section ' + width}
+            defaultOpen
+            leading={<Checkbox label={'Done ' + width} hideLabel />}
+            headingClassName={compatibility.heading}
+            panelClassName={compatibility.panel}
+          >
+            <Input label={'Notes ' + width} />
+          </Collapsible>
+        </div>
+      ))}
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const containers = canvasElement.querySelectorAll<HTMLElement>('.' + compatibility.container);
+    for (const container of containers) {
+      const heading = within(container).getByRole('heading');
+      const panel = container.querySelector<HTMLElement>('.' + compatibility.panel)!;
+      await expect(getComputedStyle(heading).scrollMarginTop).toBe('24px');
+      if (container.getBoundingClientRect().width <= 600) {
+        await expect(
+          Math.abs(panel.getBoundingClientRect().left - container.getBoundingClientRect().left),
+        ).toBeLessThan(1);
+        await expect(
+          Math.abs(panel.getBoundingClientRect().width - container.getBoundingClientRect().width),
+        ).toBeLessThan(1);
+      } else {
+        await expect(
+          panel.getBoundingClientRect().left - container.getBoundingClientRect().left,
+        ).toBeGreaterThan(44);
+      }
+      const toggle = within(container).getByRole('button');
+      await userEvent.click(toggle);
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    }
+  },
 };

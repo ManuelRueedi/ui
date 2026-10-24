@@ -7,6 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type Ref,
   type RefCallback,
+  type ReactNode,
 } from 'react';
 import { useUiMessages } from '../../i18n/UiProvider';
 import { cx } from '../../internal/cx';
@@ -20,6 +21,8 @@ export type SegmentOption = {
   label: string;
   value: string;
   disabled?: boolean;
+  /** Decorative content before the label, hidden from assistive technology. */
+  prefix?: ReactNode;
 };
 
 export type SegmentControlProps = {
@@ -27,6 +30,8 @@ export type SegmentControlProps = {
   value?: string;
   defaultValue?: string;
   onValueChange?: (value: string) => void;
+  /** Button activation, including the selected option; runs before onValueChange. Arrow-key selection does not activate. */
+  onActivate?: (value: string) => void;
   /** Names the group for screen readers. */
   label?: string;
   size?: 'sm' | 'md';
@@ -43,6 +48,7 @@ export function SegmentControl({
   value: valueProp,
   defaultValue = '',
   onValueChange,
+  onActivate,
   label,
   size = 'md',
   variant = 'segmented',
@@ -63,6 +69,7 @@ export function SegmentControl({
       buttons.current[index] = node;
     });
   const selectedIndex = options.findIndex((option) => option.value === value);
+  const optionKeys = JSON.stringify(options.map((option) => option.value));
   const firstEnabledIndex = options.findIndex((option) => !option.disabled);
   const hasSelection = selectedIndex >= 0;
   const latestIndex = useRef(selectedIndex);
@@ -119,7 +126,7 @@ export function SegmentControl({
     updateOverflow();
   }, [
     selectedIndex,
-    options.length,
+    optionKeys,
     size,
     variant,
     scrollSelectedIntoView,
@@ -136,8 +143,10 @@ export function SegmentControl({
       updateOverflow();
     });
     observer.observe(element);
+    // A prefix or translated label can resize an option without resizing the row.
+    for (const button of buttons.current) if (button) observer.observe(button);
     return () => observer.disconnect();
-  }, [scrollSelectedIntoView, updateIndicator, updateOverflow]);
+  }, [optionKeys, scrollSelectedIntoView, updateIndicator, updateOverflow]);
 
   function enabledOptions() {
     return options
@@ -229,9 +238,16 @@ export function SegmentControl({
                   : -1
             }
             onClick={() => {
-              if (!optionDisabled) setValue(option.value);
+              if (optionDisabled) return;
+              onActivate?.(option.value);
+              setValue(option.value);
             }}
           >
+            {Boolean(option.prefix) && (
+              <span className={styles.prefix} aria-hidden="true">
+                {option.prefix}
+              </span>
+            )}
             <span className={styles['label-text']}>{option.label}</span>
           </SegmentButton>
         );

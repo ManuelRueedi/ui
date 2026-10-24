@@ -1,0 +1,17 @@
+.container {
+  container: compatibility / inline-size;
+}
+
+@container compatibility (max-width: 600px) {
+  .container .panel {
+    grid-column: 1 / -1;
+  }
+}
+
+.heading {
+  scroll-margin-top: 24px;
+}
+
+.launcher {
+  view-transition-name: example-launcher;
+}

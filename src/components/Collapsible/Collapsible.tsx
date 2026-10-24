@@ -28,6 +28,10 @@ export type CollapsibleProps = {
   /** Lets the open panel fill the remaining height and scroll. */
   fill?: boolean;
   leading?: ReactNode;
+  /** Class on the heading, for an app's scroll target or temporary highlight. */
+  headingClassName?: string;
+  /** Class on the animated panel, for layout such as spanning beneath the leading content. */
+  panelClassName?: string;
   children?: ReactNode;
 };
 
@@ -42,6 +46,8 @@ export function Collapsible({
   disabled = false,
   fill = false,
   leading,
+  headingClassName,
+  panelClassName,
   children,
 }: CollapsibleProps) {
   const id = useId();
@@ -91,7 +97,7 @@ export function Collapsible({
       )}
     >
       {leading && <div className={styles.leading}>{leading}</div>}
-      <Heading className={styles.heading}>
+      <Heading className={cx(styles.heading, headingClassName)}>
         {/* A non-form trigger also works inside disabled fieldsets, so readonly details remain inspectable. */}
         <span
           ref={triggerRef}
@@ -121,7 +127,12 @@ export function Collapsible({
       </Heading>
       <div
         ref={panel}
-        className={cx(styles.panel, open && styles.open, animating && styles.animating)}
+        className={cx(
+          styles.panel,
+          open && styles.open,
+          animating && styles.animating,
+          panelClassName,
+        )}
         id={`${id}-content`}
         aria-hidden={!open}
         inert={!open}

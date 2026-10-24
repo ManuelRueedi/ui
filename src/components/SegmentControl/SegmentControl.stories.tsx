@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'lucide-react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
@@ -230,3 +231,126 @@ export const PhoneTabsDark: Story = {
 };
 
 export const DarkMode: Story = { name: 'A11y / Dark mode', ...darkA11y, render: () => <Gallery /> };
+
+function PrefixActivationExample({ phone = false }: { phone?: boolean }) {
+  const [value, setValue] = useState('measurements');
+  const [prefix, setPrefix] = useState(true);
+  const [replaced, setReplaced] = useState(false);
+  const [events, setEvents] = useState<string[]>([]);
+  const labels = phone
+    ? ['Übersicht', 'Messungen', 'Mängel', 'Abschluss']
+    : pageTabs.map((option) => option.label);
+  return (
+    <div className="story-stack" style={{ width: 520, maxWidth: '100%' }}>
+      <SegmentControl
+        label="Sections"
+        variant={phone ? 'segmented-tabs' : 'tabs'}
+        centerSelected={phone}
+        options={pageTabs.map((option, index) => ({
+          ...option,
+          value: replaced ? option.value + '-new' : option.value,
+          label: labels[index],
+          disabled: option.value === 'defects',
+          prefix:
+            option.value === 'measurements' && prefix ? (
+              <ArrowLeft size={16} strokeWidth={1.8} />
+            ) : undefined,
+        }))}
+        value={value}
+        onActivate={(next) => setEvents((previous) => [...previous, 'activate:' + next])}
+        onValueChange={(next) => {
+          setEvents((previous) => [...previous, 'change:' + next]);
+          setValue(next);
+        }}
+      />
+      <button type="button" onClick={() => setPrefix((shown) => !shown)}>
+        Toggle back arrow
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setReplaced(true);
+          setValue('measurements-new');
+        }}
+      >
+        Replace options
+      </button>
+      <output aria-label="Events">{events.join(',')}</output>
+    </div>
+  );
+}
+
+export const PrefixAndActivation: Story = {
+  name: 'Prefix and repeated activation',
+  parameters: staticStory,
+  render: () => <PrefixActivationExample />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const group = canvas.getByRole('tablist', { name: 'Sections' });
+    const [overview, measurements, defects, report] = within(group).getAllByRole('tab');
+    const events = canvas.getByLabelText('Events');
+    await expect(measurements).toHaveAccessibleName('Measurements');
+    await userEvent.click(measurements);
+    await expect(events).toHaveTextContent(/^activate:measurements$/);
+    await userEvent.click(report);
+    await expect(events).toHaveTextContent(/^activate:measurements,activate:report,change:report$/);
+    await userEvent.keyboard('{ArrowLeft}');
+    await expect(measurements).toHaveFocus();
+    await expect(events).toHaveTextContent(
+      /^activate:measurements,activate:report,change:report,change:measurements$/,
+    );
+    await userEvent.keyboard(' ');
+    const beforeDisabled = events.textContent;
+    await expect(beforeDisabled).toMatch(/,activate:measurements$/);
+    await userEvent.click(defects);
+    await expect(events.textContent).toBe(beforeDisabled);
+    await expect(overview).toHaveAttribute('aria-selected', 'false');
+
+    // Prefix changes while the same tab stays selected must resize the indicator.
+    await userEvent.click(canvas.getByRole('button', { name: 'Toggle back arrow' }));
+    const withoutPrefix = measurements.getBoundingClientRect().width;
+    await waitFor(() => {
+      expect(
+        Math.abs(parseFloat(group.style.getPropertyValue('--indicator-width')) - withoutPrefix),
+      ).toBeLessThan(1);
+    });
+    await userEvent.click(canvas.getByRole('button', { name: 'Toggle back arrow' }));
+    await waitFor(() => {
+      expect(measurements.getBoundingClientRect().width).toBeGreaterThan(withoutPrefix);
+      expect(
+        Math.abs(
+          parseFloat(group.style.getPropertyValue('--indicator-width')) -
+            measurements.getBoundingClientRect().width,
+        ),
+      ).toBeLessThan(1);
+    });
+    // Replacing keys with the same option count must observe the new buttons too.
+    await userEvent.click(canvas.getByRole('button', { name: 'Replace options' }));
+    const replacement = within(group).getByRole('tab', { name: 'Measurements' });
+    const replacementWithPrefix = replacement.getBoundingClientRect().width;
+    await userEvent.click(canvas.getByRole('button', { name: 'Toggle back arrow' }));
+    await waitFor(() => {
+      expect(replacement.getBoundingClientRect().width).toBeLessThan(replacementWithPrefix);
+      expect(
+        Math.abs(
+          parseFloat(group.style.getPropertyValue('--indicator-width')) -
+            replacement.getBoundingClientRect().width,
+        ),
+      ).toBeLessThan(1);
+    });
+  },
+};
+
+export const PhonePrefixDark: Story = {
+  name: 'A11y / Phone prefix dark',
+  ...darkA11y,
+  globals: { theme: 'dark', language: 'de-CH', viewport: { value: 'phone' } },
+  parameters: phoneParameters,
+  render: () => <PrefixActivationExample phone />,
+  play: async ({ canvasElement }) => {
+    const tab = within(canvasElement).getByRole('tab', { name: 'Messungen' });
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    await expect(getComputedStyle(tab).fontSize).toBe('14px');
+    await expect(getComputedStyle(tab).paddingInlineStart).toBe('16px');
+  },
+};
