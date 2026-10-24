@@ -1,0 +1,523 @@
+.button {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-1);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  font-variation-settings:
+    'wght' 520,
+    'GRAD' 0,
+    'wdth' 100;
+  justify-content: center;
+  letter-spacing: 0;
+  line-height: 1;
+  min-width: 110px;
+  min-height: var(--control-height-md);
+  padding: 9px 16px;
+  text-decoration: none;
+  transform: translateY(0) scale(1);
+  transition:
+    font-variation-settings 180ms var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+  user-select: none;
+  white-space: nowrap;
+  --spot-dot: rgba(10, 10, 10, 0.1);
+  --spot-ring: rgba(10, 10, 10, 0.64);
+  --spot-r-rest: 44px;
+  --spot-r-start: 22px;
+  --button-wave-light: rgba(255, 255, 255, 0.34);
+  --button-wave-mid: rgba(255, 255, 255, 0.1);
+  --button-wave-shadow: rgba(10, 10, 10, 0.2);
+  --spot-r-max: 180px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .button:hover:not(:disabled) {
+    font-variation-settings:
+      'wght' 520,
+      'GRAD' 75,
+      'wdth' 100;
+  }
+}
+
+.button:global(.force-hover) {
+  font-variation-settings:
+    'wght' 520,
+    'GRAD' 75,
+    'wdth' 100;
+}
+
+.button:global(.force-hover)::before,
+.button:global(.force-hover)::after,
+.button:global(.force-focus)::before,
+.button:global(.force-focus)::after {
+  opacity: 1;
+}
+
+.button:global(.force-hover),
+.button:global(.force-focus) {
+  --mx: 50%;
+  --my: 50%;
+}
+
+.button:active:not(:disabled),
+.button:focus-visible,
+.button:global(.force-active),
+.button:global(.force-focus) {
+  font-variation-settings:
+    'wght' 520,
+    'GRAD' 100,
+    'wdth' 100;
+  transform: translateY(0.5px) scale(0.97);
+  transition-duration: 60ms;
+}
+
+.button:global(.force-active),
+.button:global(.force-focus) {
+  --spot-r: var(--spot-r-max);
+}
+
+.button:focus-visible,
+.button:global(.force-focus) {
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+.button:disabled:not([data-state='loading']) {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.content-shell {
+  align-items: center;
+  display: grid;
+  justify-items: center;
+  position: relative;
+  z-index: 1;
+}
+
+.idle-content,
+.status-content {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-2);
+  grid-area: 1 / 1;
+  justify-content: center;
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+
+.status-content {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px) scale(0.98);
+}
+
+.button:not([data-state='idle']) .idle-content {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+.button:not([data-state='idle']) .status-content {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.status-icon {
+  flex: none;
+}
+
+.check-icon :global(path) {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: button-draw-check 320ms var(--ease-out) 80ms forwards;
+}
+
+.visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.pop {
+  animation: button-pop 180ms var(--ease-out) both;
+}
+
+.sm {
+  font-size: 12px;
+  min-width: 0;
+  min-height: var(--control-height-sm);
+  padding: 5px 11px;
+}
+
+.lg {
+  font-size: 14px;
+  min-height: 44px;
+  padding: 12px 20px;
+}
+
+.primary {
+  background: var(--ctrl-primary-bg);
+  color: var(--ctrl-primary-fg);
+  box-shadow: var(--shadow-1);
+  --spot-dot: rgba(255, 255, 255, 0.16);
+  --spot-ring: rgba(255, 255, 255, 0.74);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .primary:hover:not(:disabled) {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+  }
+}
+
+.primary:global(.force-hover) {
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+}
+
+.primary:active:not(:disabled),
+.primary:focus-visible,
+.primary:global(.force-active),
+.primary:global(.force-focus) {
+  background: var(--ctrl-primary-bg-press);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :global(.dark) .primary:hover:not(:disabled) {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
+  }
+}
+
+:global(.dark) .primary:global(.force-hover) {
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
+}
+
+.secondary {
+  background: var(--ctrl-secondary-bg);
+  border-color: var(--ctrl-secondary-border);
+  color: var(--ctrl-secondary-fg);
+  box-shadow: var(--shadow-1);
+  --spot-dot: rgba(10, 10, 10, 0.1);
+  --spot-ring: rgba(10, 10, 10, 0.64);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .secondary:hover:not(:disabled) {
+    border-color: var(--gray-500);
+  }
+}
+
+.secondary:global(.force-hover) {
+  border-color: var(--gray-500);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :global(.dark) .secondary:hover:not(:disabled) {
+    border-color: var(--gray-600);
+  }
+}
+
+:global(.dark) .secondary:global(.force-hover) {
+  border-color: var(--gray-600);
+}
+
+.secondary:active:not(:disabled),
+.secondary:focus-visible,
+.secondary:global(.force-active),
+.secondary:global(.force-focus) {
+  background: var(--ctrl-secondary-bg-press);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--fg-1);
+  --spot-dot: rgba(10, 10, 10, 0.1);
+  --spot-ring: rgba(10, 10, 10, 0.64);
+}
+
+.ghost:active:not(:disabled),
+.ghost:focus-visible,
+.ghost:global(.force-focus) {
+  background: var(--ctrl-ghost-bg-press);
+}
+
+.danger {
+  background: var(--error);
+  color: var(--gray-0);
+  box-shadow: var(--shadow-1);
+  --spot-dot: rgba(255, 255, 255, 0.18);
+  --spot-ring: rgba(255, 255, 255, 0.82);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .danger:hover:not(:disabled) {
+    box-shadow: 0 3px 10px rgba(220, 38, 38, 0.3);
+  }
+}
+
+.danger:global(.force-hover) {
+  box-shadow: 0 3px 10px rgba(220, 38, 38, 0.3);
+}
+
+.danger:active:not(:disabled),
+.danger:focus-visible,
+.danger:global(.force-active),
+.danger:global(.force-focus) {
+  background: #991b1b;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
+}
+
+.button[data-state='loading'] {
+  cursor: progress;
+  --mx: 50%;
+  --my: 50%;
+  --spot-r-max: 320px;
+}
+
+.button[data-state='loading']::before,
+.button[data-state='loading']::after {
+  animation: button-loading-wave 1.8s linear infinite;
+  background-image:
+    radial-gradient(
+      ellipse,
+      transparent 0%,
+      var(--button-wave-light) 15%,
+      var(--button-wave-mid) 26%,
+      transparent 37%,
+      var(--button-wave-shadow) 48%,
+      transparent 62%
+    ),
+    radial-gradient(circle at 1px 1px, var(--spot-dot) 1px, transparent 1px);
+  background-position:
+    50% 50%,
+    0 0;
+  background-repeat: no-repeat, repeat;
+  background-size:
+    100% 100%,
+    5px 5px;
+  background-blend-mode: overlay, normal;
+  border-radius: 999px;
+  box-shadow: none;
+  clip-path: none;
+  height: 340%;
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  transform: translate3d(-50%, -50%, 0) scale(0.12);
+  transform-origin: center;
+  transition: none;
+  width: 260%;
+  will-change: transform, opacity;
+  z-index: 0;
+  -webkit-mask-image: none;
+  mask-image: none;
+  opacity: 0;
+}
+
+.button[data-state='loading']::after {
+  animation-name: button-loading-wave-offset;
+  background-position:
+    50% 50%,
+    2px 2px;
+}
+
+.primary[data-state='loading'],
+.danger[data-state='loading'],
+.button[data-state='error'] {
+  --spot-dot: rgba(255, 255, 255, 0.42);
+  --button-wave-light: rgba(255, 255, 255, 0.78);
+  --button-wave-mid: rgba(255, 255, 255, 0.28);
+  --button-wave-shadow: rgba(0, 0, 0, 0.58);
+}
+
+.danger[data-state='loading'] {
+  --button-wave-shadow: transparent;
+}
+
+.button[data-state='success'] {
+  background: var(--success-bg);
+  border-color: var(--success-border);
+  color: var(--success-fg);
+  cursor: default;
+  animation: button-pop-state 260ms var(--ease-out);
+  --spot-dot: rgba(10, 10, 10, 0.1);
+  --spot-ring: rgba(10, 10, 10, 0.64);
+}
+
+.button[data-state='error'] {
+  background: var(--error);
+  border-color: var(--error);
+  color: var(--gray-0);
+  cursor: default;
+  animation: button-error 380ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  --spot-dot: rgba(255, 255, 255, 0.18);
+  --spot-ring: rgba(255, 255, 255, 0.82);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .button[data-state='error']:hover:not(:disabled) {
+    background: var(--error);
+    border-color: var(--error);
+  }
+}
+
+.button[data-state='error']:global(.force-hover) {
+  background: var(--error);
+  border-color: var(--error);
+}
+
+:global(.dark) .secondary,
+:global(.dark) .ghost,
+:global(.dark) .button[data-state='success'],
+:global([data-theme='dark']) .secondary,
+:global([data-theme='dark']) .ghost,
+:global([data-theme='dark']) .button[data-state='success'] {
+  --spot-dot: rgba(250, 250, 250, 0.22);
+  --spot-ring: rgba(250, 250, 250, 0.9);
+}
+
+:global(.dark) .primary,
+:global([data-theme='dark']) .primary {
+  --spot-dot: rgba(10, 10, 10, 0.22);
+  --spot-ring: rgba(10, 10, 10, 0.82);
+}
+
+:global(.dark) .primary[data-state='loading'],
+:global([data-theme='dark']) .primary[data-state='loading'] {
+  --spot-dot: rgba(10, 10, 10, 0.38);
+  --button-wave-light: rgba(10, 10, 10, 0.34);
+  --button-wave-mid: rgba(10, 10, 10, 0.16);
+  --button-wave-shadow: rgba(255, 255, 255, 0.5);
+}
+
+:global(.dark) .secondary[data-state='loading'],
+:global(.dark) .ghost[data-state='loading'],
+:global([data-theme='dark']) .secondary[data-state='loading'],
+:global([data-theme='dark']) .ghost[data-state='loading'] {
+  --spot-dot: rgba(250, 250, 250, 0.4);
+  --button-wave-light: rgba(255, 255, 255, 0.72);
+  --button-wave-mid: rgba(255, 255, 255, 0.26);
+  --button-wave-shadow: rgba(0, 0, 0, 0.62);
+}
+
+@keyframes button-pop {
+  0% {
+    transform: scale(0.82);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes button-loading-wave {
+  0% {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) scale(0.12);
+  }
+  18% {
+    opacity: 0.78;
+    transform: translate3d(-50%, -50%, 0) scale(0.32);
+  }
+  52% {
+    opacity: 0.78;
+    transform: translate3d(-50%, -50%, 0) scale(0.72);
+  }
+  78% {
+    opacity: 0.45;
+    transform: translate3d(-50%, -50%, 0) scale(1.02);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) scale(1.18);
+  }
+}
+
+@keyframes button-loading-wave-offset {
+  0% {
+    opacity: 0.78;
+    transform: translate3d(-50%, -50%, 0) scale(0.72);
+  }
+  26% {
+    opacity: 0.45;
+    transform: translate3d(-50%, -50%, 0) scale(1.02);
+  }
+  48% {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) scale(1.18);
+  }
+  49% {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) scale(0.12);
+  }
+  67% {
+    opacity: 0.78;
+    transform: translate3d(-50%, -50%, 0) scale(0.32);
+  }
+  100% {
+    opacity: 0.78;
+    transform: translate3d(-50%, -50%, 0) scale(0.72);
+  }
+}
+
+@keyframes button-pop-state {
+  0% {
+    transform: scale(0.96);
+  }
+  45% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes button-draw-check {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes button-error {
+  10%,
+  90% {
+    transform: translateX(-1.5px);
+  }
+  20%,
+  80% {
+    transform: translateX(2.5px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-3.5px);
+  }
+  40%,
+  60% {
+    transform: translateX(3.5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .button::before,
+  .button::after,
+  .pop,
+  .check-icon :global(path),
+  .button[data-state='loading']::before,
+  .button[data-state='loading']::after,
+  .button[data-state='success'],
+  .button[data-state='error'] {
+    animation: none;
+  }
+}

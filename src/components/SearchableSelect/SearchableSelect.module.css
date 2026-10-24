@@ -1,0 +1,131 @@
+.searchable-select {
+  min-width: 0;
+  position: relative;
+}
+
+.searchable-select[data-open='true'] {
+  z-index: 30;
+}
+
+.combobox {
+  min-width: 0;
+  position: relative;
+}
+
+.control {
+  background: var(--ctrl-secondary-bg);
+  border: 1px solid var(--ctrl-secondary-border);
+  border-radius: var(--radius-1);
+  height: var(--control-height-md);
+  min-width: 0;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.input {
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-1);
+  color: var(--fg-1);
+  display: block;
+  font-size: var(--control-font-size-md);
+  font-variation-settings:
+    'wght' 400,
+    'GRAD' 0,
+    'wdth' 100;
+  height: 100%;
+  line-height: 1.4;
+  outline: none;
+  padding: 8px 34px 8px 10px;
+  position: relative;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+  width: 100%;
+  z-index: 1;
+}
+
+.input::placeholder {
+  color: var(--fg-4);
+}
+
+.control[data-size='lg'] {
+  height: var(--control-height-lg);
+}
+
+.control[data-size='lg'] .input {
+  font-size: var(--control-font-size-lg);
+  padding-left: var(--space-3);
+}
+
+.control:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--border-focus);
+}
+
+.control.readonly,
+.input[readonly] {
+  cursor: text;
+}
+
+.input:disabled,
+.input[readonly] {
+  padding-right: 10px;
+}
+
+.caret {
+  align-items: center;
+  color: var(--fg-2);
+  display: inline-flex;
+  height: 100%;
+  justify-content: center;
+  pointer-events: none;
+  position: absolute;
+  right: 10px;
+  top: 0;
+  transition: transform 180ms var(--ease-out);
+  width: 12px;
+  z-index: 1;
+}
+
+.searchable-select[data-open='true'] .caret {
+  transform: rotate(180deg);
+}
+
+.control.invalid {
+  border-color: var(--error);
+}
+
+.control.invalid:focus-within {
+  border-color: var(--error);
+  box-shadow: 0 0 0 1px var(--error);
+}
+
+.control:has(.input:disabled),
+.control:has(.input:disabled):focus-within {
+  background: var(--bg-3);
+  border-color: var(--border-1);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.input:disabled {
+  color: var(--fg-3);
+  cursor: not-allowed;
+}
+
+.control:has(.input:disabled)::before,
+.control:has(.input:disabled)::after,
+.control:has(.input:disabled) .caret,
+.control.readonly .caret {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control {
+    transition: none;
+    animation: none;
+  }
+}

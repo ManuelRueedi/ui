@@ -1,0 +1,161 @@
+.control {
+  background: var(--ctrl-secondary-bg);
+  border: 1px solid var(--ctrl-secondary-border);
+  border-radius: var(--radius-1);
+  align-items: center;
+  display: flex;
+  height: var(--control-height-md);
+  min-width: 0;
+  position: relative;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.input {
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-1);
+  color: var(--fg-1);
+  display: block;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--control-font-size-md);
+  font-variation-settings:
+    'wght' 400,
+    'GRAD' 0,
+    'wdth' 100;
+  height: 100%;
+  line-height: 1.4;
+  outline: none;
+  padding: 8px 10px;
+  position: relative;
+  transition: color var(--dur-fast) var(--ease-out);
+  width: 0;
+  z-index: 1;
+}
+
+.input::placeholder {
+  color: var(--fg-4);
+}
+
+.control:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--border-focus);
+}
+
+.control[data-size='lg'] {
+  height: var(--control-height-lg);
+}
+
+.control[data-size='lg'] .input {
+  font-size: var(--control-font-size-lg);
+  padding-inline: var(--space-3);
+}
+
+.control[data-variant='plain'] {
+  background: transparent;
+  border-color: transparent;
+}
+
+.control[data-variant='plain'] .input {
+  padding-inline: var(--space-2);
+}
+
+.control[data-variant='plain']:focus-within {
+  border-color: var(--border-focus);
+}
+
+.input[type='search']::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+.input::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+}
+
+.underlay {
+  align-items: center;
+  display: flex;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+}
+
+.affix {
+  align-items: center;
+  color: var(--fg-4);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: var(--control-font-size-md);
+  pointer-events: none;
+  position: relative;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.prefix {
+  padding-left: 10px;
+}
+
+.suffix {
+  padding-right: 10px;
+}
+
+.control[data-size='lg'] .affix {
+  color: var(--fg-3);
+  font-size: var(--fs-base);
+}
+
+.control[data-size='lg'] .prefix {
+  padding-left: var(--space-3);
+}
+
+.control[data-size='lg'] .suffix {
+  padding-right: var(--space-3);
+}
+
+.control.invalid {
+  border-color: var(--error);
+}
+
+.control.invalid:focus-within {
+  border-color: var(--error);
+  box-shadow: 0 0 0 1px var(--error);
+}
+
+.control:has(.input:disabled) {
+  background: var(--bg-3);
+  border-color: var(--border-1);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.input:disabled {
+  color: var(--fg-3);
+  cursor: not-allowed;
+}
+
+.control:has(.input:disabled) .affix {
+  color: var(--fg-4);
+}
+
+.control:has(.input:disabled)::before,
+.control:has(.input:disabled)::after {
+  display: none;
+}
+
+:global(.dark) .input::-webkit-calendar-picker-indicator,
+:global([data-theme='dark']) .input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control,
+  .input {
+    transition: none;
+    animation: none;
+  }
+}

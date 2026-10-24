@@ -1,0 +1,106 @@
+.tooltip-anchor {
+  display: inline-flex;
+  width: max-content;
+}
+
+.tooltip {
+  background: var(--fg-1);
+  border: 1px solid color-mix(in srgb, var(--fg-1) 82%, var(--bg-1));
+  border-radius: var(--radius-1);
+  box-shadow: var(--shadow-3);
+  color: var(--bg-1);
+  font-size: 12px;
+  font-weight: var(--fw-medium);
+  inset: 0 auto auto 0;
+  line-height: 1.35;
+  margin: 0;
+  overflow: visible;
+  max-width: var(--tooltip-max-width);
+  opacity: 0;
+  padding: 6px 8px;
+  pointer-events: none;
+  position: fixed;
+  top: 0;
+  transform: translate3d(var(--tooltip-x), var(--tooltip-y), 0) scale(0.98);
+  transition: none;
+  visibility: hidden;
+  white-space: normal;
+  width: max-content;
+  z-index: 1000;
+}
+
+.tooltip[data-positioned='true'] {
+  visibility: visible;
+}
+
+.tooltip[data-ready='true'] {
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.tooltip[data-open='true'] {
+  opacity: 1;
+  transform: translate3d(var(--tooltip-x), var(--tooltip-y), 0) scale(1);
+}
+
+.tooltip::after {
+  background: inherit;
+  content: '';
+  height: 8px;
+  position: absolute;
+  width: 8px;
+}
+
+.tooltip[data-placement='top'] {
+  transform-origin: bottom center;
+}
+
+.tooltip[data-placement='top']::after {
+  bottom: -4px;
+  left: var(--tooltip-arrow-x);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.tooltip[data-placement='bottom'] {
+  transform-origin: top center;
+}
+
+.tooltip[data-placement='bottom']::after {
+  left: var(--tooltip-arrow-x);
+  top: -4px;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.tooltip[data-placement='left'] {
+  transform-origin: right center;
+}
+
+.tooltip[data-placement='left']::after {
+  right: -4px;
+  top: var(--tooltip-arrow-y);
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.tooltip[data-placement='right'] {
+  transform-origin: left center;
+}
+
+.tooltip[data-placement='right']::after {
+  left: -4px;
+  top: var(--tooltip-arrow-y);
+  transform: translateY(-50%) rotate(45deg);
+}
+
+:global(.dark) .tooltip,
+:global([data-theme='dark']) .tooltip {
+  background: var(--fg-1);
+  border-color: color-mix(in srgb, var(--fg-1) 70%, var(--bg-1));
+  color: var(--bg-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tooltip {
+    transition: none;
+  }
+}

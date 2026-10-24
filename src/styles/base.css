@@ -1,0 +1,124 @@
+/*
+ * Optional page base: reset, body font and element typography (h1, p, small, th...).
+ * messen.app uses it for the whole page. Apps with their own page styles can leave it out.
+ */
+
+:root {
+  font-family: var(--font-sans);
+  color: var(--fg-1);
+  background: var(--bg-1);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  background: var(--bg-1);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  color: var(--fg-1);
+  font-size: 24px;
+  font-weight: var(--fw-semibold);
+  line-height: 1.15;
+}
+
+h2 {
+  color: var(--fg-1);
+  font-size: 15px;
+  font-weight: var(--fw-semibold);
+  line-height: 1.3;
+}
+
+h3 {
+  color: var(--fg-1);
+  font-size: 13px;
+  font-weight: var(--fw-semibold);
+  line-height: 1.3;
+}
+
+p,
+td {
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: var(--fw-regular);
+  line-height: 1.35;
+}
+
+small {
+  color: var(--fg-3);
+  font-size: 12px;
+  font-weight: var(--fw-regular);
+  line-height: 1.45;
+}
+
+strong {
+  color: var(--fg-1);
+  font-weight: var(--fw-medium);
+}
+
+th {
+  color: var(--fg-3);
+  font-size: 11px;
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+button {
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+code {
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+::selection {
+  background: var(--fg-1);
+  color: var(--bg-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,50 @@
+.field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.label {
+  align-items: center;
+  color: var(--fg-2);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: var(--fw-medium);
+  gap: 4px;
+  line-height: 1.3;
+}
+
+.required {
+  color: var(--fg-3);
+}
+
+.disabled .label,
+.field:has(input:disabled, select:disabled, textarea:disabled) .label {
+  color: var(--fg-4);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.description,
+.error-message {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.description {
+  color: var(--fg-3);
+}
+
+.error-message {
+  color: var(--error);
+}

@@ -1,0 +1,99 @@
+.control {
+  background: var(--ctrl-secondary-bg);
+  border: 1px solid var(--ctrl-secondary-border);
+  border-radius: var(--radius-1);
+  height: var(--control-height-md);
+  min-width: 0;
+  position: relative;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.select,
+.input {
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-1);
+  color: var(--fg-1);
+  display: block;
+  font-size: var(--control-font-size-md);
+  font-variation-settings:
+    'wght' 400,
+    'GRAD' 0,
+    'wdth' 100;
+  height: 100%;
+  line-height: 1.4;
+  min-width: 0;
+  outline: none;
+  padding: var(--space-2) 10px;
+  position: relative;
+  width: 100%;
+  z-index: 1;
+}
+
+.select {
+  cursor: pointer;
+}
+.option {
+  background: var(--bg-1);
+  color: var(--fg-1);
+}
+.input[type='hidden'] {
+  display: none;
+}
+.input::placeholder {
+  color: var(--fg-4);
+}
+
+.control[data-size='lg'] {
+  height: var(--control-height-lg);
+}
+.control[data-size='lg'] .select,
+.control[data-size='lg'] .input {
+  font-size: var(--control-font-size-lg);
+  padding-inline: var(--space-3);
+}
+
+.control[data-variant='plain'] {
+  background: transparent;
+  border-color: transparent;
+}
+.control[data-variant='plain'] .select,
+.control[data-variant='plain'] .input {
+  padding-inline: var(--space-2);
+}
+
+.control:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--border-focus);
+}
+.control.invalid {
+  border-color: var(--error);
+}
+.control.invalid:focus-within {
+  box-shadow: 0 0 0 1px var(--error);
+}
+
+.control:has(.select:disabled, .input:disabled) {
+  background: var(--bg-3);
+  border-color: var(--border-1);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.select:disabled,
+.input:disabled {
+  color: var(--fg-3);
+  cursor: not-allowed;
+}
+.control:has(.select:disabled, .input:disabled)::before,
+.control:has(.select:disabled, .input:disabled)::after {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control {
+    transition: none;
+  }
+}
