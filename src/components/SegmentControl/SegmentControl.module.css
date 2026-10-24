@@ -1,0 +1,174 @@
+.segment {
+  display: grid;
+  grid-auto-flow: column;
+  isolation: isolate;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+  scroll-padding: var(--space-1);
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  --indicator-width: 0px;
+  --indicator-span: 0px;
+  --indicator-x: 0px;
+}
+
+.segment:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.segment.disabled {
+  opacity: 0.65;
+}
+
+.segmented {
+  background: var(--bg-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  gap: var(--space-1);
+  grid-auto-columns: minmax(max-content, 1fr);
+  padding: var(--space-1);
+}
+
+.tabs {
+  align-items: end;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-1);
+  border-radius: 0;
+  gap: var(--space-4);
+  grid-auto-columns: max-content;
+  justify-content: space-between;
+  padding: 0;
+}
+
+.indicator {
+  pointer-events: none;
+  position: absolute;
+  transform: translateX(var(--indicator-x));
+  transition:
+    transform var(--dur-slow) var(--ease-out),
+    width var(--dur-slow) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+  width: var(--indicator-width);
+  z-index: 0;
+}
+
+.segmented .indicator {
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  bottom: var(--space-1);
+  box-shadow: var(--shadow-1);
+  top: var(--space-1);
+}
+
+.tabs .indicator {
+  background: var(--fg-1);
+  bottom: -1px;
+  clip-path: inset(
+    0 calc(var(--indicator-span) - var(--indicator-x) - var(--indicator-width)) 0 var(--indicator-x)
+      round 999px
+  );
+  height: 2px;
+  left: 0;
+  transform: none;
+  transition:
+    clip-path var(--dur-slow) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+  width: var(--indicator-span);
+}
+
+.option {
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-1);
+  color: var(--fg-3);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  height: max(32px, var(--tap-target));
+  padding: 0 var(--space-3);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+  white-space: nowrap;
+  z-index: 1;
+  --spot-dot: rgba(10, 10, 10, 0.1);
+  --spot-ring: rgba(10, 10, 10, 0.64);
+  --spot-r-rest: 36px;
+  --spot-r-start: 18px;
+  --spot-r-max: 140px;
+}
+
+.label-text {
+  position: relative;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.sm .option {
+  font-size: 12px;
+  height: max(28px, var(--tap-target));
+  padding: 0 var(--space-2);
+}
+
+.tabs .option {
+  border-radius: 0;
+  font-size: 16px;
+  height: max(42px, var(--tap-target));
+  padding: 0;
+  --spot-ring: transparent;
+}
+
+.tabs.sm .option {
+  font-size: 13px;
+  height: max(34px, var(--tap-target));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .option:hover:not(:disabled) {
+    color: var(--fg-1);
+  }
+}
+
+.option:focus-visible {
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+.active {
+  color: var(--fg-1);
+}
+
+.option:disabled {
+  cursor: not-allowed;
+}
+
+.option:disabled:not(.active) {
+  color: var(--fg-4);
+}
+
+:global(.dark) .option,
+:global([data-theme='dark']) .option {
+  --spot-dot: rgba(250, 250, 250, 0.2);
+  --spot-ring: rgba(250, 250, 250, 0.82);
+}
+
+:global(.dark) .tabs .option,
+:global([data-theme='dark']) .tabs .option {
+  --spot-ring: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicator,
+  .option,
+  .option::before,
+  .option::after {
+    transition: none;
+    animation: none;
+  }
+}

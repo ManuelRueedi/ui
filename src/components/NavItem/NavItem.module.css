@@ -1,0 +1,74 @@
+.nav-item {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-1);
+  color: var(--fg-2);
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  height: var(--control-height-md);
+  padding: 0 var(--space-3);
+  text-align: left;
+  text-decoration: none;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+  width: 100%;
+  --spot-dot: rgba(10, 10, 10, 0.1);
+  --spot-ring: rgba(10, 10, 10, 0.64);
+  --spot-r-rest: 44px;
+  --spot-r-start: 28px;
+  --spot-r-max: 260px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .nav-item:hover {
+    color: var(--fg-1);
+  }
+}
+
+.nav-item:focus-visible {
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+.nav-content {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.compact {
+  justify-content: center;
+  padding: 0;
+  width: 40px;
+}
+
+.compact .nav-label {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.active {
+  background: var(--nav-active-bg, var(--bg-4));
+  color: var(--fg-1);
+}
+
+:global(.dark) .nav-item,
+:global([data-theme='dark']) .nav-item {
+  --spot-dot: rgba(250, 250, 250, 0.22);
+  --spot-ring: rgba(250, 250, 250, 0.82);
+}

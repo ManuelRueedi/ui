@@ -1,0 +1,79 @@
+.card {
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  color: var(--fg-2);
+  display: block;
+  isolation: isolate;
+  overflow: hidden;
+  padding: var(--space-5);
+  position: relative;
+  text-align: left;
+  text-decoration: none;
+  --spot-dot: rgba(10, 10, 10, 0.1);
+  --spot-ring: rgba(10, 10, 10, 0.64);
+  --spot-r-rest: 140px;
+  --spot-r-start: 48px;
+  --spot-r-max: 900px;
+  --spot-grid-size: 6px;
+}
+
+.card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.muted {
+  background: var(--bg-2);
+  padding: var(--space-4);
+}
+
+.inverse {
+  background: var(--bg-inverse);
+  border-color: var(--bg-inverse);
+  --spot-dot: rgba(255, 255, 255, 0.18);
+  --spot-ring: rgba(255, 255, 255, 0.82);
+  color: var(--fg-inverse);
+}
+
+.interactive {
+  cursor: pointer;
+}
+
+.interactive:focus-visible {
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+:global(.dark) .card,
+:global([data-theme='dark']) .card {
+  --spot-dot: rgba(250, 250, 250, 0.22);
+  --spot-ring: rgba(250, 250, 250, 0.9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interactive,
+  .card::before,
+  .card::after {
+    transition: none;
+    animation: none;
+  }
+}
+
+@supports not (mask-image: radial-gradient(circle, #000, transparent)) {
+  .interactive {
+    transform: translateY(0);
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-base) var(--ease-out),
+      transform var(--dur-base) var(--ease-out);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .interactive:hover {
+      border-color: var(--border-2);
+      box-shadow: var(--shadow-2);
+      transform: translateY(-0.5px);
+    }
+  }
+}

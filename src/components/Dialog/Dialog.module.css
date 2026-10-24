@@ -1,0 +1,151 @@
+.dialog {
+  background: transparent;
+  border: 0;
+  color: var(--fg-1);
+  margin: auto;
+  max-height: min(760px, calc(100vh - var(--space-8)));
+  max-width: calc(100vw - var(--space-8));
+  opacity: 0;
+  overflow: visible;
+  padding: 0;
+  transform: translateY(var(--space-2)) scale(0.98);
+  transition-property: opacity, transform, display, overlay;
+  transition-duration: var(--dur-base);
+  transition-timing-function: var(--ease-out);
+  transition-behavior: allow-discrete;
+  width: min(var(--dialog-width), calc(100vw - var(--space-8)));
+}
+
+.dialog[open] {
+  opacity: 1;
+  transform: none;
+  transition-duration: var(--dur-slow);
+}
+
+.dialog:not([open]),
+.dialog:not([open])::backdrop {
+  pointer-events: none;
+}
+
+.dialog.sm {
+  --dialog-width: 360px;
+}
+
+.dialog.md {
+  --dialog-width: 520px;
+}
+
+.dialog.lg {
+  --dialog-width: 720px;
+}
+
+.dialog::backdrop {
+  backdrop-filter: blur(var(--space-1));
+  background-color: color-mix(in srgb, var(--bg-1) 68%, transparent);
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    color-mix(in srgb, var(--fg-1) 18%, transparent) 0.75px,
+    transparent 1px
+  );
+  background-size: var(--loading-grid-size) var(--loading-grid-size);
+  opacity: 0;
+  transition-property: opacity, display, overlay;
+  transition-duration: var(--dur-base);
+  transition-timing-function: var(--ease-out);
+  transition-behavior: allow-discrete;
+}
+
+.dialog[open]::backdrop {
+  opacity: 1;
+  transition-duration: var(--dur-slow);
+}
+
+@starting-style {
+  .dialog[open] {
+    opacity: 0;
+    transform: translateY(var(--space-2)) scale(0.98);
+  }
+
+  .dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+.surface {
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  box-shadow: var(--shadow-popover);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: min(760px, calc(100vh - var(--space-8)));
+  overflow: hidden;
+}
+
+.dialog-head,
+.dialog-foot {
+  align-items: start;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: var(--space-4);
+}
+
+.dialog-title {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.dialog-title h2 {
+  color: var(--fg-1);
+  font-size: 15px;
+  font-weight: var(--fw-semibold);
+  line-height: 1.3;
+  margin: 0;
+}
+
+.dialog-title p {
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: var(--fw-regular);
+  line-height: 1.35;
+  margin: 0;
+  max-width: 58ch;
+}
+
+.dialog-body {
+  border-top: 1px solid var(--border-1);
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  padding: var(--space-4);
+}
+
+.dialog-foot {
+  border-top: 1px solid var(--border-1);
+  justify-items: end;
+}
+
+@media (max-width: 560px) {
+  .dialog {
+    max-height: calc(100vh - var(--space-4));
+    max-width: calc(100vw - var(--space-4));
+    width: calc(100vw - var(--space-4));
+  }
+
+  .surface {
+    max-height: calc(100vh - var(--space-4));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog,
+  .dialog::backdrop {
+    transition: none;
+  }
+
+  .dialog {
+    transform: none;
+  }
+}

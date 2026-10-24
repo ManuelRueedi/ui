@@ -1,0 +1,164 @@
+.page-loading {
+  background: var(--bg-1);
+  color: var(--fg-1);
+  isolation: isolate;
+  position: relative;
+}
+
+.page-content {
+  display: flow-root;
+  opacity: 1;
+}
+.page-loading[data-state='waiting'] > .page-content,
+.page-loading[data-state='loading'] > .page-content {
+  opacity: 0;
+  transition: none;
+}
+.page-loading[data-state='revealing'] > .page-content {
+  position: relative;
+  z-index: 2;
+  background: var(--bg-1);
+  animation: content-reveal var(--dur-page-reveal) var(--ease-in-out) both;
+}
+@keyframes content-reveal {
+  from {
+    clip-path: circle(0px at 50% 50%);
+  }
+  to {
+    clip-path: circle(var(--loading-radius) at 50% 50%);
+  }
+}
+
+.loading-visual {
+  inset: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity var(--dur-page-enter) var(--ease-in-out);
+  z-index: 1;
+}
+.page-loading[data-state='loading'] > .loading-visual {
+  opacity: 1;
+}
+@starting-style {
+  .page-loading[data-state='loading'] > .loading-visual {
+    opacity: 0;
+  }
+}
+.page-loading[data-state='revealing'] > .loading-visual {
+  transition-duration: var(--dur-page-reveal);
+}
+
+.visual-layer,
+.visual-layer::before {
+  position: absolute;
+  inset: 0;
+}
+.visual-layer::before {
+  content: '';
+  background-image: radial-gradient(circle, currentColor 0.7px, transparent 1px);
+  background-size: var(--loading-grid-size) var(--loading-grid-size);
+  opacity: 0.09;
+}
+.outline {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid currentColor;
+  opacity: 0.16;
+}
+.visual-layer[data-loading-layer='wave'] {
+  display: none;
+}
+@supports (mask-image: radial-gradient(black, transparent)) {
+  .visual-layer[data-loading-layer='wave'] {
+    display: block;
+    mask-image: radial-gradient(circle closest-side, transparent 45%, black 60%, transparent 75%);
+    mask-position: center;
+    mask-repeat: no-repeat;
+    animation: loading-wave var(--dur-page-wave) var(--ease-in-out) infinite;
+  }
+}
+.loading-visual[data-paused] .visual-layer[data-loading-layer='wave'] {
+  animation-play-state: paused;
+}
+@keyframes loading-wave {
+  0% {
+    mask-size: 1px 1px;
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    mask-size: var(--loading-wave-size) var(--loading-wave-size);
+    opacity: 0;
+  }
+}
+
+.loading-status {
+  color: var(--fg-2);
+  font-size: calc(var(--fs-base) - 2px);
+  clip-path: inset(50%);
+  height: 1px;
+  /* Pin the hidden label inside the page; left after the content it adds 1px of scrolling. */
+  left: 0;
+  overflow: hidden;
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.loading-status.is-visible:not(.below) {
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  bottom: var(--space-2);
+  clip-path: none;
+  height: auto;
+  left: auto;
+  top: auto;
+  max-width: calc(100% - 2 * var(--space-2));
+  padding: var(--space-1) var(--space-2);
+  pointer-events: none;
+  right: var(--space-2);
+  white-space: normal;
+  width: auto;
+  z-index: 2;
+}
+
+.loading-status.below {
+  clip-path: none;
+  display: grid;
+  height: auto;
+  margin-top: var(--space-1);
+  position: static;
+  white-space: normal;
+  width: auto;
+}
+
+.status-reserve,
+.status-message {
+  grid-area: 1 / 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.status-reserve {
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-loading[data-state='revealing'] > .page-content {
+    animation: none;
+  }
+  .loading-visual {
+    transition: none;
+  }
+  .visual-layer[data-loading-layer='wave'] {
+    display: none;
+    animation: none;
+  }
+}

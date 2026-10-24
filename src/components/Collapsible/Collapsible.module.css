@@ -1,0 +1,139 @@
+.collapsible {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.with-leading {
+  grid-template-columns: 44px minmax(0, 1fr);
+  column-gap: var(--space-3);
+}
+
+.leading {
+  align-self: start;
+}
+
+.heading {
+  grid-column: -2 / -1;
+  margin: 0;
+  min-width: 0;
+  color: var(--fg-1);
+  font-size: 18px;
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-normal);
+}
+
+.small .heading {
+  font-size: var(--fs-base);
+}
+
+.toggle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-1);
+  position: relative;
+  min-height: 44px;
+  padding: var(--space-2) 0;
+  border-radius: var(--radius-1);
+  cursor: pointer;
+}
+
+.toggle > span {
+  position: relative;
+  z-index: 1;
+}
+
+.title-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.title-line > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chevron {
+  display: flex;
+  flex: none;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.summary {
+  color: var(--fg-3);
+  font-size: calc(var(--fs-base) - 2px);
+  font-weight: var(--fw-regular);
+  overflow-wrap: anywhere;
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
+.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.panel {
+  grid-column: -2 / -1;
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows var(--dur-slow) var(--ease-out),
+    opacity var(--dur-slow) var(--ease-out);
+}
+
+.panel.open,
+.panel.animating {
+  visibility: visible;
+}
+
+.panel.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.panel-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.panel.open:not(.animating) > .panel-inner {
+  overflow: visible;
+}
+
+.content {
+  display: flow-root;
+  padding-top: var(--space-3);
+}
+
+.fill {
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.fill .panel {
+  min-height: 0;
+}
+
+.fill .panel.open > .panel-inner {
+  overflow: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .chevron {
+    transition: none;
+  }
+}
