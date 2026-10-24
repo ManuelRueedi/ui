@@ -337,7 +337,6 @@ export function Sidebar({
               title={recentTitle}
               size="sm"
               fill
-              toggleLabel={isRecentExpanded ? messages.collapseRecent : messages.expandRecent}
               open={isRecentExpanded}
               onOpenChange={setRecentExpanded}
             >

@@ -72,7 +72,7 @@
 .button:global(.force-focus) {
   font-variation-settings:
     'wght' 520,
-    'GRAD' 150,
+    'GRAD' 100,
     'wdth' 100;
   transform: translateY(0.5px) scale(0.97);
   transition-duration: 60ms;

@@ -32,4 +32,5 @@ drawing colors.
 
 - While working: `npm test`, `npm run typecheck` and `npm run test:storybook -- <path>`.
 - Before a pull request: `npm run test:full`, and report the result in the PR description.
-- GitHub Actions runs only `npm run check` on ready pull requests.
+- GitHub Actions runs `npm run check` and the story tests on every pull request (free for this
+  public repository). A version tag builds the package and attaches it to a GitHub release.

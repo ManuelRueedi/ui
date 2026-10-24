@@ -25,7 +25,6 @@ export type CollapsibleProps = {
   size?: 'sm' | 'md';
   headingLevel?: 2 | 3 | 4;
   disabled?: boolean;
-  toggleLabel?: string;
   /** Lets the open panel fill the remaining height and scroll. */
   fill?: boolean;
   leading?: ReactNode;
@@ -41,7 +40,6 @@ export function Collapsible({
   size = 'md',
   headingLevel = 2,
   disabled = false,
-  toggleLabel,
   fill = false,
   leading,
   children,
@@ -102,7 +100,7 @@ export function Collapsible({
           tabIndex={disabled ? -1 : 0}
           aria-expanded={open}
           aria-controls={`${id}-content`}
-          aria-label={toggleLabel || title}
+          aria-label={title}
           aria-describedby={summary ? `${id}-summary` : undefined}
           aria-disabled={disabled || undefined}
           onClick={toggle}

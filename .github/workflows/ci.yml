@@ -1,11 +1,10 @@
 name: CI
 
-# Small PR gate (about a minute): format, lint, types, unit tests and the package build.
-# Story browser tests run locally via `npm run test:full` before opening or merging a PR.
+# PR gate: format, lint, types, unit tests, the package build and every story as a browser
+# test. Actions minutes are free for public repositories, so the browser tests run here too.
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore:
       - '**/*.md'
 
@@ -22,10 +21,9 @@ env:
 
 jobs:
   check:
-    name: Fast checks
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    name: Checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: Check out repository
@@ -45,3 +43,9 @@ jobs:
 
       - name: Format, lint, types, unit tests and build
         run: npm run check
+
+      - name: Install Chromium for the story tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Run every story as a browser test
+        run: npm run test:storybook

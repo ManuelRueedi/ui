@@ -5,14 +5,17 @@ messen.app's Svelte component library; this package rebuilds those components in
 
 ## Use it in an app
 
-Install it straight from GitHub, pinned to a tag or commit:
+Install the package file of a release. It is already built, so the install needs no build, no
+Git and no token:
 
 ```bash
-npm install github:ManuelRueedi/ui#v0.1.0
+npm install https://github.com/ManuelRueedi/ui/releases/download/v0.1.0/manuelrueedi-ui-0.1.0.tgz
 ```
 
-npm runs the `prepare` script, which builds `dist/` during the install. React 19, React DOM 19
-and `lucide-react` come from the app (peer dependencies).
+React 19, React DOM 19 and `lucide-react` come from the app (peer dependencies).
+
+To try a branch before it is released, install it from Git instead
+(`npm install github:ManuelRueedi/ui#<branch>`); npm then builds `dist/` with the `prepare` script.
 
 Load the styles once, then wrap the app in `UiProvider`:
 
@@ -31,6 +34,8 @@ export function App() {
 }
 ```
 
+- **Font:** Google Sans Flex ships as one 249 KB WOFF2 file (weight, grade and optical size
+  stay variable).
 - **Dark mode:** set `data-theme="dark"` (or the class `dark`) on `<html>` or any wrapper.
 - **Languages:** `locale` is `en` or `de-CH`. Pass `messages` to override single texts.
 - **Class names** are readable and scoped, for example `ui-Button-primary`, so they never clash
@@ -67,5 +72,6 @@ already installed, set `PLAYWRIGHT_CHROMIUM_PATH` to its executable.
 ## Release
 
 1. Raise `version` in `package.json` and merge to `main`.
-2. Tag the merge commit (`git tag v0.2.0 && git push origin v0.2.0`).
-3. Update the tag in each app's `package.json` and run `npm install`.
+2. Tag the merge commit (`git tag v0.2.0 && git push origin v0.2.0`). The Release workflow checks
+   the package, builds it and attaches `manuelrueedi-ui-0.2.0.tgz` to a new GitHub release.
+3. Point each app at the new file (`npm install <release file URL>`).

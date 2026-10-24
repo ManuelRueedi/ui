@@ -38,8 +38,6 @@ export const en = {
     close: 'Close sidebar',
     collapse: 'Collapse sidebar',
     primary: 'Primary',
-    collapseRecent: 'Collapse recent items',
-    expandRecent: 'Expand recent items',
   },
   map: {
     recenter: 'Center on current location',
@@ -101,8 +99,6 @@ export const deCH: UiMessages = {
     close: 'Seitenleiste schliessen',
     collapse: 'Seitenleiste einklappen',
     primary: 'Hauptnavigation',
-    collapseRecent: 'Zuletzt geöffnete Einträge einklappen',
-    expandRecent: 'Zuletzt geöffnete Einträge ausklappen',
   },
   map: {
     recenter: 'Auf aktuellen Standort zentrieren',
