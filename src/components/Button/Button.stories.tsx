@@ -284,3 +284,38 @@ export const GermanStates: Story = {
     await expect(canvas.getByRole('button', { name: 'Fehlgeschlagen' })).toBeVisible();
   },
 };
+
+export const SpotlightDefaults: Story = {
+  name: 'Spotlight defaults',
+  tags: ['!dev', '!autodocs'],
+  parameters: staticStory,
+  render: () => (
+    <div className="story-grid">
+      <Button>Default spotlight</Button>
+      <Button href="#spotlight" onClick={(event) => event.preventDefault()}>
+        Link spotlight
+      </Button>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const user = userEvent.setup();
+    for (const surface of [
+      canvas.getByRole('button', { name: 'Default spotlight' }),
+      canvas.getByRole('link', { name: 'Link spotlight' }),
+    ]) {
+      await expect(surface).toHaveAttribute('data-spotlight-focus');
+      await user.tab();
+      await expect(surface).toHaveFocus();
+      await expect(surface.matches(':focus-visible')).toBe(true);
+      await user.keyboard('{Enter>}');
+      await expect(surface).toHaveAttribute('data-spotlight-pulsing');
+      await user.keyboard('{/Enter}');
+      await waitFor(() => expect(surface).not.toHaveAttribute('data-spotlight-pulsing'));
+      await user.pointer({ target: surface, keys: '[MouseLeft>]' });
+      await expect(surface).toHaveAttribute('data-spotlight-pulsing');
+      await user.pointer({ target: surface, keys: '[/MouseLeft]' });
+      await waitFor(() => expect(surface).not.toHaveAttribute('data-spotlight-pulsing'));
+    }
+  },
+};
