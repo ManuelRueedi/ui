@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
 import react from '@vitejs/plugin-react';
@@ -16,7 +16,9 @@ function copyStyleSheets(): Plugin {
     closeBundle() {
       mkdirSync(fromRoot('./dist'), { recursive: true });
       for (const name of ['tokens.css', 'base.css']) {
-        copyFileSync(fromRoot(`./src/styles/${name}`), fromRoot(`./dist/${name}`));
+        const css = readFileSync(fromRoot(`./src/styles/${name}`), 'utf8');
+        // The source styles are one directory deeper than the distributed styles.
+        writeFileSync(fromRoot(`./dist/${name}`), css.replace('../../fonts/', '../fonts/'));
       }
     },
   };

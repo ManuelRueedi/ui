@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect } from 'storybook/test';
 import { darkA11y, staticStory } from './storyHelpers';
 
 const meta = {
@@ -43,7 +44,14 @@ function TypeStack() {
   );
 }
 
-export const Default: Story = { render: () => <TypeStack /> };
+export const Default: Story = {
+  render: () => <TypeStack />,
+  play: async () => {
+    const fonts = await document.fonts.load('14px "Google Sans Flex"');
+    await expect(fonts.length).toBeGreaterThan(0);
+    await expect(fonts.every((font) => font.status === 'loaded')).toBe(true);
+  },
+};
 export const DarkMode: Story = {
   name: 'A11y / Dark mode',
   ...darkA11y,
