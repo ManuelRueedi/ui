@@ -1,3 +1,4 @@
+import compatibility from '../../stories/compatibility.module.css';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ClipboardCheck, FolderOpen, Home, Plus, Settings, Users, Zap } from 'lucide-react';
 import { useState } from 'react';
@@ -113,4 +114,22 @@ export const DarkMode: Story = {
   name: 'A11y / Dark mode',
   ...darkA11y,
   parameters: { canvasLayout: 'fullscreen' },
+};
+
+export const MobileLauncherHook: Story = {
+  name: 'Phone launcher transition hook',
+  tags: ['!dev', '!autodocs'],
+  parameters: staticStory,
+  globals: { viewport: { value: 'mobile1' } },
+  args: { mobileLauncherClassName: compatibility.launcher },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const launcher = canvasElement.querySelector<HTMLElement>('.' + compatibility.launcher)!;
+    await expect(launcher).toBeVisible();
+    await expect(getComputedStyle(launcher).viewTransitionName).toBe('example-launcher');
+    await userEvent.click(within(launcher).getByRole('button', { name: 'Open sidebar' }));
+    await expect(canvas.getByRole('button', { name: 'Dismiss sidebar' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Dismiss sidebar' }));
+    await expect(canvas.queryByRole('button', { name: 'Dismiss sidebar' })).not.toBeInTheDocument();
+  },
 };

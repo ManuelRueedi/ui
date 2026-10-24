@@ -53,6 +53,19 @@ every state in light and dark mode and in both languages.
 messen.app's map view (MapLibre, swisstopo) is not part of this package; it moves with
 messen.app's screens.
 
+## App composition hooks (0.1.3)
+
+- A SegmentOption may supply a decorative prefix. Its string label remains the accessible
+  name. SegmentControl.onActivate(value) runs on an enabled button's click, including activation
+  of the selected option, before onValueChange; arrow-key selection only changes the value.
+- Collapsible.headingClassName and panelClassName let an app mark a scroll/highlight target
+  and adjust the animated panel's layout using its own class. Its default grid stays unchanged.
+- Sidebar.mobileLauncherClassName marks the phone launcher's wrapper, for example while an
+  app gives that element a view-transition name.
+
+These optional hooks do not alter existing defaults. Apps keep navigation, responsive layout,
+scrolling and transition timing in their own components.
+
 ## Develop
 
 Use the Node version in `.node-version`.
