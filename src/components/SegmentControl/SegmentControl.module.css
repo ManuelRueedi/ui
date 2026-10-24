@@ -129,6 +129,30 @@
   height: max(34px, var(--tap-target));
 }
 
+@media (max-width: 760px) {
+  .segmented-tabs {
+    scrollbar-width: none;
+    --fade-left: 0px;
+    --fade-right: 0px;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--fade-left),
+      #000 calc(100% - var(--fade-right)),
+      transparent
+    );
+  }
+
+  .segmented-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .segmented-tabs .option {
+    font-size: 14px;
+    padding-inline: var(--space-4);
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .option:hover:not(:disabled) {
     color: var(--fg-1);

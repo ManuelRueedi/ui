@@ -6,7 +6,7 @@
 
 @font-face {
   font-family: 'Google Sans Flex';
-  src: url('../fonts/GoogleSansFlex.woff2') format('woff2');
+  src: url('../../fonts/GoogleSansFlex.woff2') format('woff2');
   font-weight: 100 1000;
   font-style: normal;
   font-display: swap;
@@ -100,6 +100,8 @@
   --space-12: 48px;
   --space-16: 64px;
   --space-20: 80px;
+  /* Space between the sections of a page. */
+  --section-gap: var(--space-10);
 
   --font-sans:
     'Google Sans Flex', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
@@ -176,6 +178,12 @@
   --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.6);
   --shadow-3: 0 4px 12px rgba(0, 0, 0, 0.6);
   --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.7);
+}
+
+@media (max-width: 760px) {
+  :root {
+    --section-gap: var(--space-8);
+  }
 }
 
 /* Fingers need bigger targets than a mouse pointer, and iPhones zoom into inputs whose text is smaller than 16 px. */

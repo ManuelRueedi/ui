@@ -30,8 +30,10 @@ export type SegmentControlProps = {
   /** Names the group for screen readers. */
   label?: string;
   size?: 'sm' | 'md';
-  /** `segmented` for a choice, `tabs` for switching between views. */
-  variant?: 'segmented' | 'tabs';
+  /** `segmented-tabs` keeps the segmented look while switching between tab panels. */
+  variant?: 'segmented' | 'tabs' | 'segmented-tabs';
+  /** Scrolls the selected option to the middle of an overflowing row. */
+  centerSelected?: boolean;
   disabled?: boolean;
   className?: string;
 };
@@ -44,11 +46,14 @@ export function SegmentControl({
   label,
   size = 'md',
   variant = 'segmented',
+  centerSelected = false,
   disabled = false,
   className,
 }: SegmentControlProps) {
   const messages = useUiMessages();
   const [value, setValue] = useControllableState(valueProp, defaultValue, onValueChange);
+  const isTabs = variant !== 'segmented';
+  const look = variant === 'tabs' ? 'tabs' : 'segmented';
   const segment = useRef<HTMLDivElement>(null);
   const buttons = useRef<Array<HTMLButtonElement | null>>([]);
   // One stable ref per position, so the buttons keep their spotlight between renders.
@@ -86,19 +91,41 @@ export function SegmentControl({
     element.style.setProperty('--indicator-span', `${span}px`);
   }, []);
 
-  const scrollSelectedIntoView = useCallback((index = latestIndex.current) => {
-    if (!segment.current || index < 0) return;
-    buttons.current[index]?.scrollIntoView?.({
-      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-      block: 'nearest',
-      inline: 'nearest',
-    });
+  const updateOverflow = useCallback(() => {
+    const element = segment.current;
+    if (!element) return;
+    element.style.setProperty('--fade-left', element.scrollLeft > 1 ? '32px' : '0px');
+    element.style.setProperty(
+      '--fade-right',
+      element.scrollLeft + element.clientWidth < element.scrollWidth - 1 ? '32px' : '0px',
+    );
   }, []);
+
+  const scrollSelectedIntoView = useCallback(
+    (index = latestIndex.current) => {
+      if (!segment.current || index < 0) return;
+      buttons.current[index]?.scrollIntoView?.({
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+        block: 'nearest',
+        inline: centerSelected ? 'center' : 'nearest',
+      });
+    },
+    [centerSelected],
+  );
 
   useLayoutEffect(() => {
     scrollSelectedIntoView();
     updateIndicator();
-  }, [selectedIndex, options.length, size, variant, scrollSelectedIntoView, updateIndicator]);
+    updateOverflow();
+  }, [
+    selectedIndex,
+    options.length,
+    size,
+    variant,
+    scrollSelectedIntoView,
+    updateIndicator,
+    updateOverflow,
+  ]);
 
   useEffect(() => {
     const element = segment.current;
@@ -106,10 +133,11 @@ export function SegmentControl({
     const observer = new ResizeObserver(() => {
       scrollSelectedIntoView();
       updateIndicator();
+      updateOverflow();
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [scrollSelectedIntoView, updateIndicator]);
+  }, [scrollSelectedIntoView, updateIndicator, updateOverflow]);
 
   function enabledOptions() {
     return options
@@ -165,17 +193,19 @@ export function SegmentControl({
       ref={segment}
       className={cx(
         styles.segment,
-        styles[variant],
+        styles[look],
+        variant === 'segmented-tabs' && styles['segmented-tabs'],
         styles[size],
         disabled && styles.disabled,
         hasSelection && styles['has-selection'],
         className,
       )}
-      role={variant === 'tabs' ? 'tablist' : 'radiogroup'}
+      role={isTabs ? 'tablist' : 'radiogroup'}
       aria-label={label ?? messages.selectOption}
       aria-disabled={disabled}
       tabIndex={disabled || firstEnabledIndex < 0 ? 0 : -1}
       onKeyDown={handleKeyDown}
+      onScroll={updateOverflow}
     >
       {hasSelection && <span className={styles.indicator} aria-hidden="true" />}
       {options.map((option, index) => {
@@ -187,10 +217,10 @@ export function SegmentControl({
             buttonRef={buttonRef(index)}
             className={cx(styles.option, active && styles.active)}
             disabled={optionDisabled}
-            role={variant === 'tabs' ? 'tab' : 'radio'}
+            role={isTabs ? 'tab' : 'radio'}
             data-value={option.value}
-            aria-checked={variant === 'segmented' ? active : undefined}
-            aria-selected={variant === 'tabs' ? active : undefined}
+            aria-checked={isTabs ? undefined : active}
+            aria-selected={isTabs ? active : undefined}
             tabIndex={
               optionDisabled
                 ? -1
