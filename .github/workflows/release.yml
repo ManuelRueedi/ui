@@ -44,7 +44,13 @@ jobs:
       - name: Pack
         run: npm pack
 
+      # A release made by hand on GitHub's Releases page also creates the tag; then only add the file.
       - name: Create the release with the package file
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" manuelrueedi-ui-*.tgz --title "$GITHUB_REF_NAME" --generate-notes
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" manuelrueedi-ui-*.tgz --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" manuelrueedi-ui-*.tgz --title "$GITHUB_REF_NAME" --generate-notes
+          fi
