@@ -62,6 +62,7 @@
   --control-height-sm: 32px;
   --control-height-md: 36px;
   --control-height-lg: 50px;
+  --control-font-size-sm: 12px;
   --control-font-size-md: 13px;
   --control-font-size-lg: 16px;
   /* The smallest tap target. It only applies to touch screens, see below. */
@@ -199,6 +200,7 @@
   :root {
     --control-height-sm: 44px;
     --control-height-md: 44px;
+    --control-font-size-sm: 16px;
     --control-font-size-md: 16px;
     --tap-target: 44px;
   }

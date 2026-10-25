@@ -17,7 +17,7 @@ const meta = {
     required: false,
   },
   argTypes: {
-    size: { control: 'radio', options: ['md', 'lg'] },
+    size: { control: 'radio', options: ['sm', 'md', 'lg'] },
     variant: { control: 'radio', options: ['default', 'plain'] },
   },
   render: (args) => (
@@ -85,6 +85,24 @@ export const MeasurementControls: Story = {
       <Input label="Schleifenimpedanz" size="lg" suffix="Ω" inputMode="decimal" />
     </div>
   ),
+};
+
+export const Sizes: Story = {
+  name: 'Sizes',
+  parameters: staticStory,
+  render: () => (
+    <div className="story-form">
+      <Input label="Small" size="sm" suffix="m" defaultValue="2.45" />
+      <Input label="Medium" defaultValue="2.45" suffix="m" />
+      <Input label="Large" size="lg" defaultValue="2.45" suffix="m" />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const small = within(canvasElement).getByLabelText('Small');
+    await userEvent.clear(small);
+    await userEvent.type(small, '3.1');
+    await expect(small).toHaveValue('3.1');
+  },
 };
 
 export const DarkMode: Story = {

@@ -36,6 +36,12 @@
   color: var(--fg-4);
 }
 
+.control[data-size='sm'] .textarea {
+  font-size: var(--control-font-size-sm);
+  min-height: calc(var(--control-height-sm) - 2px);
+  padding: var(--space-1) var(--space-2);
+}
+
 .control[data-size='lg'] .textarea {
   font-size: var(--control-font-size-lg);
   min-height: calc(var(--control-height-lg) - 2px);
