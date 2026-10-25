@@ -16,7 +16,8 @@ drawing colors.
   Grayscale first; color only for warnings and errors. Minimal radius (`var(--radius-1)`).
 - Styles are CSS Modules. Do not style another component's internals; add a prop or a
   `className` hook instead.
-- Texts that a component shows on its own come from `src/i18n/messages.ts` (`en` and `de-CH`).
+- Texts that a component shows on its own come from `src/i18n/messages.ts` (`en`, `de-CH`, `fr-CH`
+  and `it-CH`).
 - Copy is short, sentence case and neutral. No emoji or decorative gradients.
 - File names must stay unique when case is ignored (Windows and macOS).
 

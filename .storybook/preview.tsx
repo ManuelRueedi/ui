@@ -22,7 +22,7 @@ const withTheme: Decorator = (Story, context) => {
   const theme = context.globals.theme === 'dark' ? 'dark' : 'light';
   const fullscreen = context.parameters.canvasLayout === 'fullscreen';
   return (
-    <UiProvider locale={language === 'de-CH' ? 'de-CH' : 'en'}>
+    <UiProvider locale={typeof language === 'string' ? language : 'en'}>
       <div className={`story-theme${fullscreen ? ' fullscreen' : ''}`} data-theme={theme}>
         <div className="story-theme-content">
           <Story />
@@ -44,6 +44,8 @@ const preview: Preview = {
         items: [
           { value: 'en', title: 'English' },
           { value: 'de-CH', title: 'Deutsch (Schweiz)' },
+          { value: 'fr-CH', title: 'Français (Suisse)' },
+          { value: 'it-CH', title: 'Italiano (Svizzera)' },
         ],
         dynamicTitle: true,
       },
