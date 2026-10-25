@@ -9,7 +9,7 @@ Install the package file of a release. It is already built, so the install needs
 Git and no token:
 
 ```bash
-npm install https://github.com/ManuelRueedi/ui/releases/download/v0.1.0/manuelrueedi-ui-0.1.0.tgz
+npm install https://github.com/ManuelRueedi/ui/releases/download/v0.2.0/manuelrueedi-ui-0.2.0.tgz
 ```
 
 React 19, React DOM 19 and `lucide-react` come from the app (peer dependencies).
@@ -37,7 +37,8 @@ export function App() {
 - **Font:** Google Sans Flex ships as one 249 KB WOFF2 file (weight, grade and optical size
   stay variable).
 - **Dark mode:** set `data-theme="dark"` (or the class `dark`) on `<html>` or any wrapper.
-- **Languages:** `locale` is `en` or `de-CH`. Pass `messages` to override single texts.
+- **Languages:** `locale` is `en`, `de-CH`, `fr-CH` or `it-CH`. Other tags fall back by language
+  (`fr` → `fr-CH`) and then to English. Pass `messages` to override single texts.
 - **Class names** are readable and scoped, for example `ui-Button-primary`, so they never clash
   with an app's own CSS.
 - **Tokens** keep messen.app's names (`--fg-1`, `--bg-2`, `--space-4`, `--radius-1` …). Watch
@@ -46,9 +47,9 @@ export function App() {
 ## Components
 
 Avatar, Badge, Button, Card, Checkbox, Collapsible, Dialog, EditableSelect, Field, IconButton,
-Input, NavItem, PageLoading, SearchableSelect, SegmentControl, Select, Sidebar, Textarea and
+Input, Menu, NavItem, PageLoading, SearchableSelect, SegmentControl, Select, Sidebar, Textarea and
 Tooltip, plus the `useSpotlight` hook for the hover light on custom surfaces. Storybook shows
-every state in light and dark mode and in both languages.
+every state in light and dark mode; its toolbar switches between the four languages.
 
 messen.app's map view (MapLibre, swisstopo) is not part of this package; it moves with
 messen.app's screens.

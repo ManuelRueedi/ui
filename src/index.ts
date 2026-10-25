@@ -14,6 +14,7 @@ export * from './components/Dialog/Dialog';
 export * from './components/Field/Field';
 export * from './components/IconButton/IconButton';
 export * from './components/Input/Input';
+export * from './components/Menu/Menu';
 export * from './components/NavItem/NavItem';
 export * from './components/SegmentControl/SegmentControl';
 export * from './components/Select/Select';
