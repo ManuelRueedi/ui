@@ -95,6 +95,8 @@
   inset: var(--menu-y, 0) auto auto var(--menu-x, 0);
   margin: 0;
   max-height: var(--menu-max-height, min(70dvh, 600px));
+  /* The viewport without a classic scroll bar, the same box place() keeps the panel inside. */
+  max-width: calc(100% - 2 * var(--space-3));
   position: fixed;
   transform: none;
 }

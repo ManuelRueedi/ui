@@ -215,34 +215,69 @@ export function Menu({
     // A panel opens at its top: Chrome can show a long panel scrolled to its end.
     element.scrollTop = 0;
     if (!topLayer) return;
+    // The trigger moves with scrolling, and also when content next to it or above it changes
+    // without a resize or scroll. Like Floating UI's autoUpdate, each frame compares the
+    // trigger's box and places the panel again when it moved, or when the panel's size changed.
     let frame = 0;
-    const placeSoon = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(place);
+    let panelResized = false;
+    let lastBox = '';
+    const follow = () => {
+      const box = trigger.current?.getBoundingClientRect();
+      const key = box ? `${box.left} ${box.top} ${box.width} ${box.height}` : '';
+      if (panelResized || key !== lastBox) {
+        panelResized = false;
+        lastBox = key;
+        place();
+      }
+      frame = requestAnimationFrame(follow);
     };
-    const placeOnScroll = (event: Event) => {
-      // Scrolling inside the panel does not move it.
-      if (event.target instanceof Node && element.contains(event.target)) return;
-      place();
-    };
+    frame = requestAnimationFrame(follow);
     window.addEventListener('resize', place);
-    window.addEventListener('scroll', placeOnScroll, true);
     const observer =
-      typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(placeSoon);
+      typeof ResizeObserver === 'undefined'
+        ? undefined
+        : new ResizeObserver(() => {
+            panelResized = true;
+          });
     observer?.observe(element);
-    if (trigger.current) observer?.observe(trigger.current);
+    // A trigger scrolled out of sight (out of a scrolling box, or off the page) closes the menu,
+    // so the panel does not float over other content. Only after it was seen: a menu that opens
+    // out of view (defaultOpen further down a page) stays open.
+    let seen = false;
+    const visibility =
+      typeof IntersectionObserver === 'undefined' || !trigger.current
+        ? undefined
+        : new IntersectionObserver((entries) => {
+            const entry = entries.at(-1);
+            if (!entry) return;
+            if (entry.isIntersecting) {
+              seen = true;
+              return;
+            }
+            if (!seen) return;
+            // Keeps the focus in the menu without scrolling the hidden trigger into view.
+            const anchor = trigger.current;
+            if (
+              root.current?.contains(document.activeElement) &&
+              document.activeElement !== anchor
+            ) {
+              anchor?.focus({ preventScroll: true });
+            }
+            close();
+          });
+    if (trigger.current) visibility?.observe(trigger.current);
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', placeOnScroll, true);
       observer?.disconnect();
+      visibility?.disconnect();
       setPopoverOpen(element, false);
       element.removeAttribute('popover');
       for (const name of ['--menu-x', '--menu-y', '--menu-max-height']) {
         element.style.removeProperty(name);
       }
     };
-  }, [open, place]);
+  }, [open, place, close]);
 
   useLayoutEffect(() => {
     if (open) place();

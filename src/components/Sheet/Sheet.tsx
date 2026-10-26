@@ -15,6 +15,7 @@ import {
 } from 'react';
 import { useUiMessages } from '../../i18n/UiProvider';
 import { cx } from '../../internal/cx';
+import { escapeUsedInside } from '../../internal/escape';
 import { useMergedRefs } from '../../internal/refs';
 import { useControllableState } from '../../internal/useControllableState';
 import { IconButton } from '../IconButton/IconButton';
@@ -67,12 +68,16 @@ export type SheetProps = Omit<HTMLAttributes<HTMLElement>, 'title' | 'children' 
   contained?: boolean;
   /**
    * Phone snaps with a drag handle: `peek` or `full`. Leave out snap and defaultSnap for a
-   * sheet as tall as its content (at most `--sheet-max-height`, 88dvh by default).
+   * sheet as tall as its content (at most `--sheet-max-height`: 88dvh by default, 100% of the
+   * container when contained).
    */
   snap?: SheetSnap;
   defaultSnap?: SheetSnap;
   onSnapChange?: (snap: SheetSnap) => void;
-  /** The preferred peek height in px, at most 42% of the visual viewport. 232 by default. */
+  /**
+   * The preferred peek height in px, 232 by default. It is at most 42% of the visual viewport
+   * (of the container when contained), but at least 196 px, and always 120 px below full.
+   */
   peekHeight?: number;
   /**
    * The height the sheet covers on phones, in px; also while it is dragged. 0 when the layout is
@@ -140,6 +145,26 @@ function lockPageScroll() {
 function pointOutside(element: Element, x: number, y: number) {
   const box = element.getBoundingClientRect();
   return x < box.left || x > box.right || y < box.top || y > box.bottom;
+}
+
+/** The box a contained sheet sits in: its positioned ancestor. */
+function containerOf(element: HTMLElement) {
+  return element.offsetParent instanceof HTMLElement ? element.offsetParent : element.parentElement;
+}
+
+/** Whether an element between `from` and `stop` can still scroll up (content further up). */
+function scrollsUp(from: EventTarget | null, stop: HTMLElement) {
+  for (
+    let node = from instanceof Element ? from : null;
+    node && node !== stop && stop.contains(node);
+    node = node.parentElement
+  ) {
+    if (node.scrollTop > 0) {
+      const { overflowY } = window.getComputedStyle(node);
+      if (overflowY === 'auto' || overflowY === 'scroll') return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -220,11 +245,9 @@ export function Sheet({
     (height: number) => {
       const element = root.current;
       if (!element) return;
-      const container = latest.current.contained ? element.offsetParent : null;
+      const container = latest.current.contained ? containerOf(element) : null;
       const fitted =
-        container instanceof HTMLElement && container.clientHeight > 0
-          ? Math.min(height, container.clientHeight)
-          : height;
+        container && container.clientHeight > 0 ? Math.min(height, container.clientHeight) : height;
       element.style.setProperty('--sheet-height', `${fitted}px`);
       if (latest.current.open) report(fitted);
     },
@@ -271,15 +294,21 @@ export function Sheet({
     }
     if (!open) return;
     const viewport = window.visualViewport;
+    const container = contained ? containerOf(element) : null;
     const measure = () => {
-      const next = sheetGeometry(viewport?.height ?? window.innerHeight, peekHeight);
+      const viewportHeight = viewport?.height ?? window.innerHeight;
+      // A contained sheet fills its container, so drags and releases use that height too.
+      const height =
+        container && container.clientHeight > 0
+          ? Math.min(viewportHeight, container.clientHeight)
+          : viewportHeight;
+      const next = sheetGeometry(height, peekHeight);
       geometry.current = next;
       // A drag in progress keeps the height under the finger.
       if (drag.current) return;
       applyHeight(snapRef.current === 'full' ? next.fullHeight : next.peekHeight);
     };
     measure();
-    const container = contained ? (element.offsetParent ?? element.parentElement) : null;
     const observer =
       container && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
     if (container) observer?.observe(container);
@@ -328,6 +357,8 @@ export function Sheet({
     const element = body.current;
     if (!active || !open || !element) return;
     let touchId: number | null = null;
+    let startX = 0;
+    let startTarget: EventTarget | null = null;
     const scrolled = () => Math.max(element.scrollTop, root.current?.scrollTop ?? 0);
     const findTouch = (touches: TouchList) => {
       if (touchId === null) return null;
@@ -348,9 +379,14 @@ export function Sheet({
       const startSnap = snapRef.current;
       if (!shape || event.touches.length !== 1) return;
       if (startSnap === 'full' && scrolled() > 1) return;
+      // A Menu panel or a list in the top layer is still in the body's DOM; it scrolls itself.
+      const popup = event.target instanceof Element ? event.target.closest('[popover]') : null;
+      if (popup && popup !== root.current) return;
       const touch = event.touches.item(0);
       if (!touch) return;
       touchId = touch.identifier;
+      startX = touch.clientX;
+      startTarget = event.target;
       drag.current = startDrag(
         startSnap,
         touch.clientY,
@@ -366,12 +402,26 @@ export function Sheet({
       const shape = geometry.current;
       if (!touch || !current || !shape) return;
       const deltaY = touch.clientY - current.startY;
+      const deltaX = touch.clientX - startX;
       // In full, scrolled content and an upward swipe scroll natively.
       if (current.startSnap === 'full' && (scrolled() > 1 || (deltaY < 0 && !current.moved))) {
         stop();
         return;
       }
-      if (!current.moved && Math.abs(deltaY) <= tapSlop) return;
+      if (!current.moved) {
+        if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) <= tapSlop) return;
+        if (
+          // A sideways swipe scrolls a row or moves a slider.
+          Math.abs(deltaX) > Math.abs(deltaY) ||
+          // The browser already scrolls natively; the move cannot be taken over.
+          !event.cancelable ||
+          // An inner list or text area scrolled down scrolls back up first.
+          (deltaY > 0 && scrollsUp(startTarget, element))
+        ) {
+          stop();
+          return;
+        }
+      }
       event.preventDefault();
       if (!current.moved) setDragging(true);
       moveDrag(current, touch.clientY, shape, performance.now());
@@ -402,7 +452,9 @@ export function Sheet({
       element.removeEventListener('touchmove', onTouchMove);
       element.removeEventListener('touchend', onTouchEnd);
       element.removeEventListener('touchcancel', onTouchCancel);
+      // Also ends a handle drag that a close or a layout switch interrupted.
       drag.current = null;
+      setDragging(false);
     };
   }, [active, open, applyHeight, finishDrag]);
 
@@ -439,7 +491,11 @@ export function Sheet({
 
   const handlePointerEnd = (event: ReactPointerEvent<HTMLButtonElement>, cancelled: boolean) => {
     const current = drag.current;
-    if (!current || current.pointerId !== event.pointerId) return;
+    if (!current) {
+      setDragging(false);
+      return;
+    }
+    if (current.pointerId !== event.pointerId) return;
     event.preventDefault();
     event.stopPropagation();
     // A drag is not a click; a tap still toggles.
@@ -468,23 +524,26 @@ export function Sheet({
   const hidden = useRef(false);
   const layoutRuns = useRef(0);
 
+  /** Shows the modal dialog and moves the focus to initialFocus, if given. */
+  const showDialog = useCallback((dialog: HTMLDialogElement) => {
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+    latest.current.initialFocus?.current?.focus();
+  }, []);
+
   useEffect(() => {
     const dialog = modal ? (root.current as HTMLDialogElement | null) : null;
     if (!dialog) return;
-    if (open && !dialog.open) {
-      if (typeof dialog.showModal === 'function') dialog.showModal();
-      else dialog.setAttribute('open', '');
-      latest.current.initialFocus?.current?.focus();
-    }
+    if (open && !dialog.open) showDialog(dialog);
     if (!open && dialog.open) {
       if (typeof dialog.close === 'function') dialog.close();
       else dialog.removeAttribute('open');
     }
-  }, [modal, open, nativeCloses]);
+  }, [modal, open, nativeCloses, showDialog]);
 
   // Unmounting an open modal sheet closes it first, so the browser returns focus to the opener.
   // A Suspense boundary that hides this tree runs the same cleanup and later runs the effect
-  // again: then the sheet opens again if the parent still has it open.
+  // again: then the sheet opens again if the parent still has it open. StrictMode does the same.
   useLayoutEffect(() => {
     const dialog = modal ? (root.current as HTMLDialogElement | null) : null;
     layoutRuns.current += 1;
@@ -495,7 +554,7 @@ export function Sheet({
       !dialog.open &&
       typeof dialog.showModal === 'function'
     ) {
-      dialog.showModal();
+      showDialog(dialog);
     }
     return () => {
       if (dialog?.open && typeof dialog.close === 'function') {
@@ -503,9 +562,11 @@ export function Sheet({
         dialog.close();
       }
     };
-  }, [modal]);
+  }, [modal, showDialog]);
 
-  useEffect(() => {
+  // A layout effect, like the close above: a Suspense boundary that hides the sheet releases the
+  // lock, and takes it again when it shows the sheet again.
+  useLayoutEffect(() => {
     if (modal && open) return lockPageScroll();
   }, [modal, open]);
 
@@ -560,6 +621,7 @@ export function Sheet({
             onPointerMove={handlePointerMove}
             onPointerUp={(event) => handlePointerEnd(event, false)}
             onPointerCancel={(event) => handlePointerEnd(event, true)}
+            onLostPointerCapture={(event) => handlePointerEnd(event, true)}
           >
             <span aria-hidden="true" className={styles.grip} />
           </button>
@@ -639,7 +701,8 @@ export function Sheet({
         setNativeCloses((count) => count + 1);
       }}
       onKeyDown={(event: ReactKeyboardEvent<HTMLElement>) => {
-        if (event.key === 'Escape' && !event.defaultPrevented) {
+        // Content that used Escape (an open Menu, a search field clearing its text) keeps it open.
+        if (event.key === 'Escape' && !escapeUsedInside(event)) {
           // Also keeps the browser from turning the key into its own close request.
           event.preventDefault();
           requestClose('escape');

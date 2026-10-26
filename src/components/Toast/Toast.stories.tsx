@@ -1,10 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { darkA11y, staticStory, wait } from '../../stories/storyHelpers';
 import { Button } from '../Button/Button';
 import { Checkbox } from '../Checkbox/Checkbox';
 import { Collapsible } from '../Collapsible/Collapsible';
+import { Dialog } from '../Dialog/Dialog';
+import { Menu, MenuItem } from '../Menu/Menu';
 import { Toast, Toaster, useToast, type ToastOptions, type ToastTone } from './Toast';
 
 const meta = {
@@ -192,6 +194,8 @@ export const PersistentError: Story = {
   },
 };
 
+const noop = () => {};
+
 export const ReplaceById: Story = {
   name: 'Replace by id',
   render: (args) => (
@@ -199,25 +203,57 @@ export const ReplaceById: Story = {
       <div className="story-grid">
         <ShowButton
           label="Start saving"
-          options={{ id: 'save', message: 'Saving', duration: null }}
+          options={{
+            id: 'save',
+            message: 'Saving',
+            duration: null,
+            action: { label: 'Cancel', onClick: noop, closes: false },
+          }}
         />
         <ShowButton
           label="Finish saving"
           options={{ id: 'save', message: 'Saved at 10:02', tone: 'success' }}
         />
+        <ShowButton
+          label="Fail saving"
+          options={{
+            id: 'save',
+            message: 'Save failed',
+            tone: 'error',
+            action: { label: 'Retry', onClick: noop, closes: false },
+          }}
+        />
       </div>
     </Toaster>
   ),
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'Start saving' }));
-    const toast = await findToast('Saving');
-    await userEvent.click(canvas.getByRole('button', { name: 'Finish saving' }));
-    // The same toast changes in place, so it does not slide in again.
-    await expect(toast).toHaveTextContent('Saved at 10:02');
-    await expect(toast).toHaveAttribute('data-tone', 'success');
-    await expect(toast.getAnimations()).toHaveLength(0);
-    await expect(region().querySelectorAll('[data-tone]')).toHaveLength(1);
+    await step('A success replaces it in place', async () => {
+      await userEvent.click(canvas.getByRole('button', { name: 'Start saving' }));
+      const toast = await findToast('Saving');
+      await userEvent.click(canvas.getByRole('button', { name: 'Finish saving' }));
+      // The same toast changes in place, so it does not slide in again.
+      await expect(toast).toHaveTextContent('Saved at 10:02');
+      await expect(toast).toHaveAttribute('data-tone', 'success');
+      await expect(toast.getAnimations()).toHaveLength(0);
+      await expect(region().querySelectorAll('[data-tone]')).toHaveLength(1);
+    });
+
+    await step('An error replaces it in place too, with the focus kept inside', async () => {
+      await userEvent.click(canvas.getByRole('button', { name: 'Start saving' }));
+      const toast = await findToast('Saving');
+      const action = within(toast).getByRole('button', { name: 'Cancel' });
+      action.focus();
+      // A click from code: the focus stays on Cancel, as when the save fails on its own.
+      canvas.getByRole('button', { name: 'Fail saving' }).click();
+      await waitFor(() => expect(toast).toHaveAttribute('data-tone', 'error'));
+      await expect(toast).toBeInTheDocument();
+      await expect(toast.getAnimations()).toHaveLength(0);
+      await expect(action).toHaveAccessibleName('Retry');
+      await expect(action).toHaveFocus();
+      // Announced with the urgency of an error from where it is.
+      await expect(toast).toHaveAttribute('aria-live', 'assertive');
+    });
   },
 };
 
@@ -351,6 +387,9 @@ const phoneParameters = {
   viewport: { options: { phone: { name: 'Phone', styles: { width: '390px', height: '844px' } } } },
 };
 
+const exportDetails =
+  'Request https://example.com/api/v2/projects/7f3a9c1e55b24c0e9a0d3c61f1e1b2aa/exports/floorplan.pdf returned 500';
+
 export const Phone: Story = {
   name: 'On a phone',
   tags: ['!dev', '!autodocs'],
@@ -358,14 +397,20 @@ export const Phone: Story = {
   parameters: phoneParameters,
   render: (args) => (
     <Toaster {...args}>
-      <ShowButton
-        label="Save"
-        options={{
-          message: 'Saved',
-          tone: 'success',
-          action: { label: 'Open report', onClick: () => {} },
-        }}
-      />
+      <div className="story-grid">
+        <ShowButton
+          label="Save"
+          options={{
+            message: 'Saved',
+            tone: 'success',
+            action: { label: 'Open report', onClick: () => {} },
+          }}
+        />
+        <ShowButton
+          label="Export"
+          options={{ message: 'The export failed', tone: 'error', details: exportDetails }}
+        />
+      </div>
     </Toaster>
   ),
   play: async ({ canvasElement }) => {
@@ -375,6 +420,192 @@ export const Phone: Story = {
     await expect(window.innerWidth).toBe(390);
     await expect(toast.getBoundingClientRect().width).toBe(390 - 32);
     await expect(toast.getBoundingClientRect().left).toBe(16);
+
+    // A long URL in the details breaks inside the toast.
+    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Export' }));
+    const error = await findToast('The export failed');
+    await expect(error.scrollWidth).toBeLessThanOrEqual(error.clientWidth);
+    await expect(error.getBoundingClientRect().right).toBeLessThanOrEqual(390 - 16);
+  },
+};
+
+/** Whether the point in the middle of the element reaches it, or something covers it. */
+function reachable(element: HTMLElement) {
+  const box = element.getBoundingClientRect();
+  const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+  return element.contains(hit);
+}
+
+function PrintDialog() {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [cancelled, setCancelled] = useState(0);
+  return (
+    <div className="story-stack">
+      <Button variant="primary" onClick={() => setOpen(true)}>
+        Print settings
+      </Button>
+      <output aria-label="Cancelled">{cancelled}</output>
+      <Dialog open={open} title="Print" onClose={() => setOpen(false)}>
+        <Button
+          onClick={() =>
+            toast.show({
+              id: 'print',
+              message: 'Preparing print',
+              duration: null,
+              action: { label: 'Cancel', onClick: () => setCancelled((count) => count + 1) },
+            })
+          }
+        >
+          Print
+        </Button>
+      </Dialog>
+    </div>
+  );
+}
+
+export const UnderModal: Story = {
+  name: 'Under an open dialog',
+  tags: ['!autodocs'],
+  parameters: staticStory,
+  render: (args) => (
+    <Toaster {...args}>
+      <PrintDialog />
+    </Toaster>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Print settings' }));
+    const dialog = await body().findByRole('dialog', { name: 'Print' });
+    await waitFor(() => expect(dialog).toBeVisible());
+    // The page behind the dialog is inert: the toast stays under the backdrop rather than
+    // being raised above it, where it would look usable while presses go to the backdrop.
+    const toggles: string[] = [];
+    const record = (event: Event) => toggles.push((event as ToggleEvent).newState);
+    region().addEventListener('beforetoggle', record);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Print' }));
+    const cancel = region().querySelector<HTMLElement>('[data-tone] button')!;
+    await expect(cancel).toHaveTextContent('Cancel');
+    await settled(toastOf(cancel));
+    region().removeEventListener('beforetoggle', record);
+    await expect(toggles).toEqual([]);
+    await expect(reachable(cancel)).toBe(false);
+
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(dialog).not.toHaveAttribute('open'));
+    await expect(reachable(cancel)).toBe(true);
+    await userEvent.click(cancel);
+    await expect(canvas.getByLabelText('Cancelled')).toHaveTextContent('1');
+  },
+};
+
+function ProjectBar() {
+  const toast = useToast();
+  return (
+    <div style={{ height: 320, paddingTop: 8 }}>
+      <Menu label="Project" align="start">
+        <MenuItem keepOpen onSelect={() => toast.show({ message: 'Saved', tone: 'success' })}>
+          Save
+        </MenuItem>
+        <MenuItem>Rename</MenuItem>
+        <MenuItem>Duplicate</MenuItem>
+        <MenuItem>Delete</MenuItem>
+      </Menu>
+    </div>
+  );
+}
+
+export const UnderOpenMenu: Story = {
+  name: 'Under an open menu',
+  tags: ['!autodocs'],
+  globals: { viewport: { value: 'phone' } },
+  parameters: { ...phoneParameters, canvasLayout: 'fullscreen' },
+  args: { placement: 'top' },
+  render: (args) => (
+    <div style={{ '--toast-offset-top': '56px' } as CSSProperties}>
+      <Toaster {...args}>
+        <ProjectBar />
+      </Toaster>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Project' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
+    const toast = await findToast('Saved');
+    // The toast lies over the open menu's items, but the menu the user works in stays on top.
+    const panel = canvas.getByRole('group', { name: 'Project' });
+    const items = panel.getBoundingClientRect();
+    const box = toast.getBoundingClientRect();
+    const overlap = {
+      left: Math.max(box.left, items.left),
+      right: Math.min(box.right, items.right),
+      top: Math.max(box.top, items.top),
+      bottom: Math.min(box.bottom, items.bottom),
+    };
+    await expect(overlap.right - overlap.left).toBeGreaterThan(20);
+    await expect(overlap.bottom - overlap.top).toBeGreaterThan(20);
+    const hit = document.elementFromPoint(
+      (overlap.left + overlap.right) / 2,
+      (overlap.top + overlap.bottom) / 2,
+    );
+    await expect(panel.contains(hit)).toBe(true);
+    await userEvent.click(canvas.getByRole('button', { name: 'Rename' }));
+    await expect(canvas.getByRole('button', { name: 'Project' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  },
+};
+
+function BusyPage() {
+  const toast = useToast();
+  return (
+    <div className="story-stack">
+      <Button
+        onClick={() =>
+          toast.show({
+            message: 'Circuit F1.2 deleted',
+            action: { label: 'Undo', onClick: () => {} },
+          })
+        }
+      >
+        Delete F1.2
+      </Button>
+      <div className="story-grid">
+        {['Plan', 'Circuits', 'Rooms', 'Print', 'Share', 'Settings'].map((name) => (
+          <Button key={name}>{name}</Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export const Hotkey: Story = {
+  name: 'F8 reaches the newest toast',
+  tags: ['!dev', '!autodocs'],
+  parameters: staticStory,
+  render: (args) => (
+    <Toaster {...args}>
+      <BusyPage />
+    </Toaster>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const remove = canvas.getByRole('button', { name: 'Delete F1.2' });
+    remove.focus();
+    await userEvent.keyboard('{Enter}');
+    const toast = await findToast('Circuit F1.2 deleted');
+    await expect(region()).toHaveAttribute('aria-keyshortcuts', 'F8');
+    // Many controls lie between the page and the toasts in the tab order; F8 skips them.
+    await userEvent.keyboard('{F8}');
+    await expect(toast).toHaveFocus();
+    await expect(region()).toHaveAttribute('data-paused');
+    await userEvent.tab();
+    await expect(within(toast).getByRole('button', { name: 'Undo' })).toHaveFocus();
+    await userEvent.keyboard('{Escape}');
+    await expect(toast).not.toBeInTheDocument();
+    await expect(remove).toHaveFocus();
   },
 };
 

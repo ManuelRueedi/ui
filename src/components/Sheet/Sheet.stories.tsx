@@ -7,6 +7,7 @@ import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
 import { Input } from '../Input/Input';
 import { Sheet, type SheetCloseReason, type SheetProps } from './Sheet';
+import { sheetGeometry } from './sheetGeometry';
 
 const meta = {
   title: 'Components/Sheet',
@@ -135,6 +136,14 @@ export const ModalContentHeight: Story = {
     await expect(box.height).toBeLessThan(window.innerHeight * 0.5);
     // The page behind does not scroll.
     await expect(document.documentElement.style.overflow).toBe('hidden');
+
+    // Escape in a search field with text belongs to the field (the browser clears it).
+    const search = within(sheet).getByLabelText('Search');
+    await userEvent.type(search, 'Socket');
+    await userEvent.keyboard('{Escape}');
+    await expect(sheet).toHaveAttribute('open');
+    await expect(canvas.getByLabelText('Last close request')).toHaveTextContent('none');
+    await userEvent.clear(search);
 
     await userEvent.keyboard('{Escape}');
     await expect(canvas.getByLabelText('Last close request')).toHaveTextContent('escape');
@@ -352,14 +361,42 @@ export const Contained: Story = {
     await expect(Math.abs(sheet.getBoundingClientRect().bottom - (frame.bottom - 1))).toBeLessThan(
       1,
     );
-    await expect(sheet.offsetHeight).toBe(232);
+    // Peek and full follow the frame, not the window: peek is at most 42% of the frame.
+    const { peekHeight } = sheetGeometry(page.clientHeight);
+    await expect(peekHeight).toBeLessThan(232);
+    await expect(Math.abs(sheet.getBoundingClientRect().height - peekHeight)).toBeLessThan(0.5);
 
     // In full it fills the frame, not the window.
-    await userEvent.click(within(sheet).getByRole('button', { name: 'Expand' }));
+    const handle = within(sheet).getByRole('button', { name: 'Expand' });
+    await userEvent.click(handle);
     await waitFor(() => expect(sheet.offsetHeight).toBe(page.clientHeight));
     await expect(canvas.getByLabelText('Covered height')).toHaveTextContent(
       String(page.clientHeight),
     );
+
+    // A drag down from full follows the pointer at once.
+    const send = (type: string, clientY: number) =>
+      handle.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          clientY,
+          isPrimary: true,
+          pointerId: 1,
+          pointerType: 'mouse',
+        }),
+      );
+    send('pointerdown', 100);
+    await waitFor(() => expect(sheet).toHaveAttribute('data-dragging', 'true'));
+    send('pointermove', 160);
+    await waitFor(() => expect(sheet.offsetHeight).toBe(page.clientHeight - 60));
+    await expect(canvas.getByLabelText('Covered height')).toHaveTextContent(
+      String(page.clientHeight - 60),
+    );
+    send('pointercancel', 160);
+    await waitFor(() => expect(sheet.offsetHeight).toBe(page.clientHeight));
+    await expect(sheet).not.toHaveAttribute('data-dragging');
   },
 };
 

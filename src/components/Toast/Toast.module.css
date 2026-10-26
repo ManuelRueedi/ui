@@ -68,6 +68,12 @@
   animation-name: enter-from-above;
 }
 
+/* Focused by the hotkey. */
+.toast:focus-visible {
+  box-shadow: var(--shadow-popover), var(--focus-ring);
+  outline: none;
+}
+
 /* Icon and first line sit level with the buttons, whose height grows on touch screens. */
 .icon,
 .content {
@@ -104,6 +110,8 @@
   font-size: 12px;
   line-height: 1.4;
   min-width: 0;
+  /* URLs, paths and ids break instead of running out of the toast. */
+  overflow-wrap: anywhere;
 }
 
 .actions {

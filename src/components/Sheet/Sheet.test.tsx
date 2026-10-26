@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Suspense, useRef, useState } from 'react';
+import { StrictMode, Suspense, useRef, useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Sheet, type SheetCloseReason, type SheetProps, type SheetSnap } from './Sheet';
 import {
@@ -121,25 +121,34 @@ describe('sheet geometry', () => {
 /** A non-modal phone sheet with snaps, as the CircuitDocs selection drawer uses it. */
 function mountDrawer({
   onClose = vi.fn(),
+  extra,
   ...props
-}: Partial<SheetProps> & { onClose?: (reason: SheetCloseReason) => void } = {}) {
+}: Partial<SheetProps> & {
+  onClose?: (reason: SheetCloseReason) => void;
+  extra?: ReactNode;
+} = {}) {
   function Harness() {
     const [open, setOpen] = useState(true);
+    const [layout, setLayout] = useState<'phone' | 'wide'>('phone');
     return (
       <>
         <button type="button" onClick={() => setOpen((value) => !value)}>
           Toggle sheet
         </button>
+        <button type="button" onClick={() => setLayout(layout === 'phone' ? 'wide' : 'phone')}>
+          Toggle layout
+        </button>
         <Sheet
           open={open}
           modal={false}
-          layout="phone"
+          layout={layout}
           defaultSnap="peek"
           title="Selected cable"
           onClose={onClose}
           {...props}
         >
           <button type="button">A content action</button>
+          {extra}
         </Sheet>
       </>
     );
@@ -149,19 +158,27 @@ function mountDrawer({
   const body = () => screen.getByRole('button', { name: 'A content action' }).parentElement!;
   const handle = () => screen.getByRole('button', { name: /^(Expand|Collapse)$/ });
   const toggle = () => act(() => handle().click());
-  const touch = (type: 'touchstart' | 'touchmove' | 'touchend', y: number) => {
-    const point = { identifier: 1, clientX: 20, clientY: y };
+  const touch = (
+    type: 'touchstart' | 'touchmove' | 'touchend',
+    y: number,
+    {
+      x = 20,
+      target = body(),
+      cancelable = true,
+    }: { x?: number; target?: Element; cancelable?: boolean } = {},
+  ) => {
+    const point = { identifier: 1, clientX: x, clientY: y };
     const list = (active: boolean) => ({
       length: active ? 1 : 0,
       item: (index: number) => (active && index === 0 ? point : null),
     });
-    const event = new Event(type, { bubbles: true, cancelable: true });
+    const event = new Event(type, { bubbles: true, cancelable });
     Object.defineProperties(event, {
       touches: { value: list(type !== 'touchend') },
       changedTouches: { value: list(true) },
     });
     act(() => {
-      body().dispatchEvent(event);
+      target.dispatchEvent(event);
     });
     return event;
   };
@@ -248,6 +265,140 @@ describe('Sheet touch scrolling', () => {
     view.touch('touchmove', 600);
     view.touch('touchend', 600);
     expect(view.onClose).toHaveBeenCalledWith('swipe');
+  });
+
+  it('leaves a touch in a top-layer popup inside the body to the popup', () => {
+    const view = mountDrawer({
+      extra: (
+        <div popover="manual" data-testid="menu-panel">
+          <button type="button">Socket</button>
+        </div>
+      ),
+    });
+    const target = screen.getByTestId('menu-panel').firstElementChild!;
+    view.touch('touchstart', 500, { target });
+    const up = view.touch('touchmove', 380, { target });
+    view.touch('touchend', 380, { target });
+    expect(up.defaultPrevented).toBe(false);
+    expect(view.sheet()).toHaveAttribute('data-snap', 'peek');
+
+    view.touch('touchstart', 500, { target });
+    view.touch('touchmove', 620, { target });
+    view.touch('touchend', 620, { target });
+    expect(view.onClose).not.toHaveBeenCalled();
+  });
+
+  it('scrolls a scrolled inner list back up before it folds the sheet', () => {
+    const view = mountDrawer({
+      defaultSnap: 'full',
+      extra: (
+        <ul data-testid="list" style={{ height: 240, overflowY: 'auto' }}>
+          <li>Socket 1</li>
+        </ul>
+      ),
+    });
+    const list = screen.getByTestId('list');
+    const target = list.firstElementChild!;
+    list.scrollTop = 600;
+    view.touch('touchstart', 300, { target });
+    const down = view.touch('touchmove', 460, { target });
+    view.touch('touchend', 460, { target });
+    expect(down.defaultPrevented).toBe(false);
+    expect(view.sheet()).toHaveAttribute('data-snap', 'full');
+
+    // Once the list is at its top, the same pull folds the sheet.
+    list.scrollTop = 0;
+    view.touch('touchstart', 300, { target });
+    const fold = view.touch('touchmove', 460, { target });
+    view.touch('touchend', 460, { target });
+    expect(fold.defaultPrevented).toBe(true);
+    expect(view.sheet()).toHaveAttribute('data-snap', 'peek');
+  });
+
+  it('leaves a sideways swipe, and a move the browser already scrolls, alone', () => {
+    const view = mountDrawer();
+    view.touch('touchstart', 500, { x: 300 });
+    const side = view.touch('touchmove', 505, { x: 150 });
+    view.touch('touchmove', 570, { x: 0 });
+    view.touch('touchend', 570, { x: 0 });
+    expect(side.defaultPrevented).toBe(false);
+    expect(view.sheet()).not.toHaveAttribute('data-dragging');
+    expect(view.onClose).not.toHaveBeenCalled();
+
+    view.touch('touchstart', 500);
+    const native = view.touch('touchmove', 600, { cancelable: false });
+    view.touch('touchend', 600);
+    expect(native.defaultPrevented).toBe(false);
+    expect(view.onClose).not.toHaveBeenCalled();
+    expect(view.sheet()).toHaveAttribute('data-snap', 'peek');
+  });
+
+  it('ends the dragging state when a close or a layout switch interrupts a handle drag', async () => {
+    const view = mountDrawer();
+    fireEvent.pointerDown(view.handle(), { button: 0, pointerId: 1, clientY: 600 });
+    fireEvent.pointerMove(view.handle(), { pointerId: 1, clientY: 560 });
+    expect(view.sheet()).toHaveAttribute('data-dragging', 'true');
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle sheet' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle sheet' }));
+    expect(view.sheet()).not.toHaveAttribute('data-dragging');
+
+    fireEvent.pointerDown(view.handle(), { button: 0, pointerId: 1, clientY: 600 });
+    fireEvent.pointerMove(view.handle(), { pointerId: 1, clientY: 560 });
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle layout' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle layout' }));
+    expect(view.sheet()).not.toHaveAttribute('data-dragging');
+
+    // A lost pointer capture ends a drag as well.
+    fireEvent.pointerDown(view.handle(), { button: 0, pointerId: 1, clientY: 600 });
+    fireEvent.pointerMove(view.handle(), { pointerId: 1, clientY: 560 });
+    fireEvent.lostPointerCapture(view.handle(), { pointerId: 1 });
+    expect(view.sheet()).not.toHaveAttribute('data-dragging');
+  });
+
+  it('measures a contained sheet from its container, so a drag from full follows at once', () => {
+    const heights: number[] = [];
+    function Stage() {
+      return (
+        <div data-testid="stage">
+          <Sheet
+            open
+            modal={false}
+            contained
+            layout="phone"
+            defaultSnap="full"
+            title="Selected cable"
+            onHeightChange={(px) => heights.push(px)}
+          >
+            Content
+          </Sheet>
+        </div>
+      );
+    }
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.dataset.testid === 'stage' ? 480 : 0;
+    });
+    render(<Stage />);
+    const sheet = screen.getByRole('region', { name: 'Selected cable' });
+    const handle = screen.getByRole('button', { name: 'Collapse' });
+    const peek = sheetGeometry(480).peekHeight;
+    expect(sheet.style.getPropertyValue('--sheet-height')).toBe('480px');
+    // Peek follows the container too: at most 42% of it, but at least 196 px.
+    act(() => handle.click());
+    expect(sheet.style.getPropertyValue('--sheet-height')).toBe(`${peek}px`);
+    act(() => handle.click());
+    expect(sheet.style.getPropertyValue('--sheet-height')).toBe('480px');
+
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientY: 100 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 130 });
+    // 30 px down from full in a 480 px stage: it follows at once, instead of staying at 480 px
+    // until the drag has passed the difference to the window height.
+    expect(sheet.style.getPropertyValue('--sheet-height')).toBe('450px');
+    // Cancelled, it settles back on full.
+    fireEvent.pointerCancel(handle, { pointerId: 1, clientY: 130 });
+    expect(sheet).toHaveAttribute('data-snap', 'full');
+    expect(heights).toEqual([480, peek, 480, 450, 480]);
   });
 
   it('starts both scroll containers from the top when folded or opened again', async () => {
@@ -429,6 +580,22 @@ describe('Sheet close reasons', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('leaves Escape to a search field with text, which clears itself', () => {
+    const onClose = vi.fn();
+    render(
+      <Sheet open title="Add installation" onClose={onClose}>
+        <input aria-label="Search" type="search" defaultValue="Socket" />
+      </Sheet>,
+    );
+    const search = screen.getByLabelText('Search') as HTMLInputElement;
+    expect(fireEvent.keyDown(search, { key: 'Escape' })).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+    // Empty, the next Escape closes the sheet.
+    fireEvent.change(search, { target: { value: '' } });
+    expect(fireEvent.keyDown(search, { key: 'Escape' })).toBe(false);
+    expect(onClose).toHaveBeenCalledWith('escape');
+  });
+
   it('reopens when the browser closes it while the parent keeps it open', () => {
     render(<Parent keepOpenFor={['escape', 'button']} />);
     const dialog = getDialog();
@@ -553,6 +720,71 @@ describe('Sheet close reasons', () => {
     fireEvent.keyDown(screen.getByLabelText('Search'), { key: 'Escape' });
     expect(getDialog()).not.toHaveAttribute('open');
     expect(document.documentElement.style.overflow).toBe('');
+  });
+});
+
+/** A Sheet that mounts already open, with a search field as initialFocus. */
+function OpenWithSearch() {
+  const search = useRef<HTMLInputElement>(null);
+  return (
+    <Sheet open title="Add installation" initialFocus={search}>
+      <button type="button">Recent</button>
+      <input ref={search} aria-label="Search" />
+    </Sheet>
+  );
+}
+
+describe('Sheet initialFocus and scroll lock', () => {
+  beforeEach(() => {
+    // Like a browser, showModal focuses the first focusable element.
+    dialogPrototype.showModal = vi.fn(function (this: HTMLDialogElement) {
+      this.setAttribute('open', '');
+      this.querySelector<HTMLElement>('button, input')?.focus();
+    });
+  });
+
+  it('focuses initialFocus when it mounts open under StrictMode', () => {
+    render(
+      <StrictMode>
+        <OpenWithSearch />
+      </StrictMode>,
+    );
+    expect(screen.getByLabelText('Search')).toHaveFocus();
+  });
+
+  it('focuses initialFocus again and holds the scroll lock only while Suspense shows it', async () => {
+    let resolve = () => {};
+    const pending = new Promise<void>((done) => {
+      resolve = done;
+    });
+    let ready = false;
+    function Content({ wait }: { wait: boolean }) {
+      if (wait && !ready) throw pending;
+      return null;
+    }
+    const view = (wait: boolean) => (
+      <Suspense fallback={<p>Loading</p>}>
+        <OpenWithSearch />
+        <Content wait={wait} />
+      </Suspense>
+    );
+    const { rerender } = render(view(false));
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    rerender(view(true));
+    expect(screen.getByText('Loading')).toBeInTheDocument();
+    expect(getDialog()).not.toHaveAttribute('open');
+    // No modal shows, so the page scrolls again.
+    expect(document.documentElement.style.overflow).toBe('');
+
+    await act(async () => {
+      ready = true;
+      resolve();
+      await pending;
+    });
+    expect(getDialog()).toHaveAttribute('open');
+    expect(screen.getByLabelText('Search')).toHaveFocus();
+    expect(document.documentElement.style.overflow).toBe('hidden');
   });
 });
 

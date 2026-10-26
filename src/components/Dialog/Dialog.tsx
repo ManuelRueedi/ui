@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { useUiMessages } from '../../i18n/UiProvider';
 import { cx } from '../../internal/cx';
+import { escapeUsedInside } from '../../internal/escape';
 import { useMergedRefs } from '../../internal/refs';
 import { IconButton } from '../IconButton/IconButton';
 import styles from './Dialog.module.css';
@@ -145,7 +146,8 @@ export function Dialog({
         setNativeCloses((count) => count + 1);
       }}
       onKeyDown={(event: ReactKeyboardEvent<HTMLDialogElement>) => {
-        if (event.key === 'Escape') {
+        // An open Menu or a field inside that used Escape keeps the dialog open.
+        if (event.key === 'Escape' && !escapeUsedInside(event)) {
           // Also keeps the browser from turning the key into its own close request.
           event.preventDefault();
           requestClose('escape');

@@ -127,15 +127,21 @@ function SearchFields() {
  * The rules for the browser's clear button. getComputedStyle cannot read that pseudo-element, but
  * the browser drops rules whose selector it does not understand, so the rules found here apply.
  */
-function clearButtonRules() {
+function clearButtonRules(media?: string) {
+  const isClearButton = (rule: CSSRule): rule is CSSStyleRule =>
+    rule instanceof CSSStyleRule &&
+    rule.selectorText.includes('Input-input') &&
+    rule.selectorText.includes('::-webkit-search-cancel-button');
   return Array.from(document.styleSheets).flatMap((sheet) => {
     try {
-      return Array.from(sheet.cssRules).filter(
-        (rule): rule is CSSStyleRule =>
-          rule instanceof CSSStyleRule &&
-          rule.selectorText.includes('Input-input') &&
-          rule.selectorText.includes('::-webkit-search-cancel-button'),
-      );
+      const rules = Array.from(sheet.cssRules);
+      if (!media) return rules.filter(isClearButton);
+      return rules
+        .filter(
+          (rule): rule is CSSMediaRule =>
+            rule instanceof CSSMediaRule && rule.conditionText.includes(media),
+        )
+        .flatMap((rule) => Array.from(rule.cssRules).filter(isClearButton));
     } catch {
       return [];
     }
@@ -161,6 +167,14 @@ export const SearchField: Story = {
     const locked = rules.find((rule) => rule.style.getPropertyValue('display') === 'none');
     await expect(locked?.selectorText).toContain(':disabled');
     await expect(locked?.selectorText).toContain('[readonly]');
+    // Forced colours would paint the cross in the field's own colour; it keeps a system colour.
+    const forced = clearButtonRules('forced-colors: active');
+    const forcedCross = forced.find((rule) => !rule.selectorText.includes(':hover'));
+    await expect(forcedCross?.style.getPropertyValue('forced-color-adjust')).toBe('none');
+    await expect(forcedCross?.style.getPropertyValue('background-color').toLowerCase()).toBe(
+      'fieldtext',
+    );
+    await expect(forced.some((rule) => rule.selectorText.includes(':hover'))).toBe(true);
   },
 };
 

@@ -25,10 +25,11 @@ import styles from './Toast.module.css';
 export type ToastTone = 'neutral' | 'success' | 'warning' | 'error';
 
 /**
- * What removed the toast: its timer, the close button, its action, Escape, a newer toast (the
- * same id, or one more than `max`), or `dismiss(id)`.
+ * What removed the toast: its timer, the close button, its action, Escape, a newer toast with the
+ * same id ('replaced'), a newer toast beyond `max` ('overflow'), or `dismiss(id)`.
  */
-export type ToastDismissReason = 'timeout' | 'button' | 'action' | 'escape' | 'replaced' | 'code';
+export type ToastDismissReason =
+  'timeout' | 'button' | 'action' | 'escape' | 'replaced' | 'overflow' | 'code';
 
 export type ToastAction = {
   label: string;
@@ -70,10 +71,18 @@ export type ToastApi = {
 export type ToasterProps = {
   /** Screen edge the toasts stack against; the newest sits nearest to it. */
   placement?: 'top' | 'bottom';
-  /** Toasts shown at once; the oldest go first. Default 3. */
+  /**
+   * Toasts shown at once. Beyond it the oldest toast that would time out goes first, then the
+   * oldest persistent one; a toast that holds the focus or the pointer stays. Default 3.
+   */
   max?: number;
   /** Name of the region. Defaults to the catalog text ("Notifications"). */
   label?: string;
+  /**
+   * The key (a KeyboardEvent.key value, without modifiers) that moves the focus to the newest
+   * toast, which pauses the timers. null turns it off. Default 'F8'.
+   */
+  hotkey?: string | null;
   /** Class on the region. */
   className?: string;
   children?: ReactNode;
@@ -84,11 +93,20 @@ export type ToastProps = ToastOptions & {
   open?: boolean;
 };
 
+type Politeness = 'polite' | 'assertive';
+
 type ToastRecord = {
   id: string;
   options: ToastOptions;
   /** The element that held focus when the toast arrived, for focus return. */
   focusAtShow: Element | null;
+  /**
+   * The live region the toast arrived in. It stays there when its tone changes, so the element
+   * is not mounted again (no new entry animation, the focus inside stays).
+   */
+  live: Politeness;
+  /** The declarative Toast that shows it; cleared when an imperative show takes the id. */
+  owner?: object;
 };
 
 type Pause = 'hover' | 'focus' | 'hidden' | 'detached';
@@ -108,6 +126,10 @@ function toneOf(options: ToastOptions): ToastTone {
 
 function durationOf(options: ToastOptions): number | null {
   return options.duration === undefined ? defaultDurations[toneOf(options)] : options.duration;
+}
+
+function politenessOf(options: ToastOptions): Politeness {
+  return toneOf(options) === 'error' ? 'assertive' : 'polite';
 }
 
 function sameOptions(a: ToastOptions, b: ToastOptions) {
@@ -162,9 +184,27 @@ function focusIfAvailable(element: Element | null, pointer: boolean, region: HTM
 }
 
 /**
+ * Whether the user works in other top-layer content: a modal dialog, which makes the region inert
+ * (a toast raised above it would look usable while presses go to the backdrop), or a popup such
+ * as a Menu panel, a list or a tooltip, whose items a raised toast would cover.
+ */
+function topLayerInUse(region: HTMLElement) {
+  try {
+    if (document.querySelector('dialog:modal')) return true;
+    return Array.from(document.querySelectorAll(':popover-open')).some(
+      (element) => element !== region,
+    );
+  } catch {
+    // A browser without :modal or :popover-open has no top layer to share.
+    return false;
+  }
+}
+
+/**
  * Shows the region in the top layer, or shows it again so it sits above top-layer content opened
- * since (sheets, tooltips). Without popover support (jsdom) the region gets no popover attribute,
- * which would hide it there, and stays fixed with a z-index.
+ * since, e.g. a fullscreen plan. Not while a modal dialog or a popup is open: toasts then stay
+ * below it. Without popover support (jsdom) the region gets no popover attribute, which would
+ * hide it there, and stays fixed with a z-index.
  */
 function showRegion(region: HTMLElement, raise: boolean) {
   if (typeof region.showPopover !== 'function') return;
@@ -172,7 +212,7 @@ function showRegion(region: HTMLElement, raise: boolean) {
   try {
     if (region.matches(':popover-open')) {
       // Hiding would drop the focus of someone working in a toast; it is on top already then.
-      if (!raise || region.contains(document.activeElement)) return;
+      if (!raise || region.contains(document.activeElement) || topLayerInUse(region)) return;
       region.hidePopover();
     }
     region.showPopover();
@@ -190,6 +230,8 @@ class ToastStore {
   focusReturn: FocusReturn | null = null;
   /** The element focus came from when it last entered the region. */
   origin: Element | null = null;
+  /** The node under the pointer while it is inside the region. */
+  pointer: Node | null = null;
   readonly api: ToastApi;
   private sequence = 0;
   private readonly timers = new Map<string, Timer>();
@@ -205,35 +247,12 @@ class ToastStore {
     this.api = { show: this.show, update: this.update, dismiss: this.dismiss };
   }
 
-  has = (id: string) => this.items.some((record) => record.id === id);
+  show = (input: ToastOptions): string => this.add(input, undefined);
 
-  show = (input: ToastOptions): string => {
-    const id = input.id ?? `toast-${++this.sequence}`;
-    const options = { ...input, id };
-    const existing = this.find(id);
-    if (existing) {
-      this.noteFocus(existing, false);
-      this.commit(this.items.map((record) => (record.id === id ? { ...record, options } : record)));
-      this.startTimer(id, durationOf(options));
-      existing.options.onDismiss?.('replaced');
-      return id;
-    }
+  /** Shows a toast for a declarative Toast, which owns it until an imperative show takes its id. */
+  showOwned = (input: ToastOptions, owner: object) => this.add(input, owner);
 
-    const active = document.activeElement;
-    const focusAtShow =
-      active && active !== document.body && !this.region.current?.contains(active) ? active : null;
-    const next = [...this.items, { id, options, focusAtShow }];
-    const dropped = next.splice(0, Math.max(0, next.length - Math.max(1, this.max.current)));
-    for (const record of dropped) {
-      this.stopTimer(record.id);
-      this.noteFocus(record, false);
-    }
-    this.arrived = true;
-    this.commit(next);
-    this.startTimer(id, durationOf(options));
-    for (const record of dropped) record.options.onDismiss?.('replaced');
-    return id;
-  };
+  owns = (id: string, owner: object) => this.find(id)?.owner === owner;
 
   update = (id: string, options: Partial<ToastOptions>) => {
     const existing = this.find(id);
@@ -242,14 +261,30 @@ class ToastStore {
 
   dismiss = (id: string) => this.remove(id, 'code');
 
-  /** Replaces every option of a shown toast, as a declarative Toast does on each render. */
-  replace = (id: string, options: ToastOptions) => {
+  /** Replaces every option of the owner's toast, as a declarative Toast does on each render. */
+  replace = (id: string, options: ToastOptions, owner: object) => {
     const existing = this.find(id);
-    if (existing && !sameOptions(existing.options, options)) this.set(existing, options);
+    if (existing?.owner === owner && !sameOptions(existing.options, options)) {
+      this.set(existing, options);
+    }
   };
 
-  /** Removes a toast without telling its onDismiss (its declarative Toast closed or unmounted). */
-  withdraw = (id: string) => this.remove(id, 'code', { quiet: true });
+  /**
+   * Removes the owner's toast without telling its onDismiss (its declarative Toast closed or
+   * unmounted). A toast an imperative show put in its place stays.
+   */
+  withdraw = (id: string, owner: object) => {
+    if (this.owns(id, owner)) this.remove(id, 'code', { quiet: true });
+  };
+
+  /** Moves the focus to the newest toast; false when there is none. */
+  focusNewest() {
+    const newest = this.items.at(-1);
+    const element = newest && this.elements.get(newest.id);
+    if (!element) return false;
+    element.focus();
+    return document.activeElement === element;
+  }
 
   remove(id: string, reason: ToastDismissReason, { pointer = false, quiet = false } = {}) {
     const record = this.find(id);
@@ -312,6 +347,59 @@ class ToastStore {
 
   private find(id: string) {
     return this.items.find((record) => record.id === id);
+  }
+
+  private add(input: ToastOptions, owner: object | undefined): string {
+    const id = input.id ?? `toast-${++this.sequence}`;
+    const options = { ...input, id };
+    const existing = this.find(id);
+    if (existing) {
+      this.noteFocus(existing, false);
+      this.commit(
+        this.items.map((record) => (record.id === id ? { ...record, options, owner } : record)),
+      );
+      this.startTimer(id, durationOf(options));
+      existing.options.onDismiss?.('replaced');
+      return id;
+    }
+
+    const active = document.activeElement;
+    const focusAtShow =
+      active && active !== document.body && !this.region.current?.contains(active) ? active : null;
+    const next = [...this.items, { id, options, focusAtShow, live: politenessOf(options), owner }];
+    const dropped = this.overflow(next);
+    for (const record of dropped) {
+      this.stopTimer(record.id);
+      this.noteFocus(record, false);
+    }
+    this.arrived = true;
+    this.commit(next.filter((record) => !dropped.includes(record)));
+    this.startTimer(id, durationOf(options));
+    for (const record of dropped) record.options.onDismiss?.('overflow');
+    return id;
+  }
+
+  /**
+   * The toasts to drop so that at most `max` stay: the oldest that would time out on their own
+   * first, then the oldest persistent ones. The new toast and a toast the user is in (focus or
+   * pointer) stay, even when that leaves one more than `max` for a while.
+   */
+  private overflow(next: ToastRecord[]) {
+    const excess = next.length - Math.max(1, this.max.current);
+    if (excess <= 0) return [];
+    const older = next.slice(0, -1).filter((record) => !this.engaged(record));
+    const timed = older.filter((record) => durationOf(record.options) !== null);
+    const persistent = older.filter((record) => durationOf(record.options) === null);
+    return [...timed, ...persistent].slice(0, excess);
+  }
+
+  private engaged(record: ToastRecord) {
+    const element = this.elements.get(record.id);
+    if (!element) return false;
+    return (
+      element.contains(document.activeElement) ||
+      (this.pointer !== null && element.contains(this.pointer))
+    );
   }
 
   private set(existing: ToastRecord, options: ToastOptions) {
@@ -397,6 +485,9 @@ function ToastItem({
   const { id, options } = record;
   const { message, details, icon, action, dismissible = true, attributes } = options;
   const tone = toneOf(options);
+  // A toast whose tone changed stays in the live region it arrived in; its own aria-live then
+  // announces the change at the new tone's urgency.
+  const politeness = politenessOf(options);
   const ToneIcon = toneIcons[tone];
   const iconNode = icon === undefined ? <ToneIcon size={18} strokeWidth={1.9} /> : icon;
   const ref = useCallback((node: HTMLDivElement | null) => store.register(id, node), [store, id]);
@@ -414,7 +505,10 @@ function ToastItem({
       ref={ref}
       className={cx(styles.toast, styles[tone])}
       data-tone={tone}
+      aria-live={politeness === record.live ? undefined : politeness}
       aria-atomic="true"
+      // The hotkey focuses the toast itself; Tab then reaches its buttons.
+      tabIndex={-1}
       style={{ '--toast-row': row } as CSSProperties}
       onKeyDown={handleKeyDown}
     >
@@ -465,6 +559,7 @@ export function Toaster({
   placement = 'bottom',
   max = 3,
   label,
+  hotkey = 'F8',
   className,
   children,
 }: ToasterProps) {
@@ -483,7 +578,9 @@ export function Toaster({
     // Watched on the document: a toast removed under the pointer sends no pointerleave.
     const syncHover = (event: PointerEvent) => {
       const target = event.type === 'pointerout' ? event.relatedTarget : event.target;
-      store.setPaused('hover', target instanceof Node && Boolean(region.current?.contains(target)));
+      const inside = target instanceof Node && Boolean(region.current?.contains(target));
+      store.pointer = inside ? target : null;
+      store.setPaused('hover', inside);
     };
     syncHidden();
     document.addEventListener('visibilitychange', syncHidden);
@@ -514,8 +611,23 @@ export function Toaster({
     }
     // Not every browser sends blur when the focused toast is removed.
     store.setPaused('focus', element.contains(document.activeElement));
-    if (items.length === 0) store.setPaused('hover', false);
+    if (items.length === 0) {
+      store.pointer = null;
+      store.setPaused('hover', false);
+    }
   }, [items, store]);
+
+  // The hotkey reaches the toasts from anywhere: the region is last in the tab order.
+  useEffect(() => {
+    if (!hotkey) return;
+    const focusToasts = (event: KeyboardEvent) => {
+      if (event.key !== hotkey || event.defaultPrevented || event.isComposing) return;
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (store.focusNewest()) event.preventDefault();
+    };
+    document.addEventListener('keydown', focusToasts);
+    return () => document.removeEventListener('keydown', focusToasts);
+  }, [hotkey, store]);
 
   const polite: ReactNode[] = [];
   const assertive: ReactNode[] = [];
@@ -530,7 +642,7 @@ export function Toaster({
         dismissLabel={messages.toast.dismiss}
       />
     );
-    if (toneOf(record.options) === 'error') assertive.push(item);
+    if (record.live === 'assertive') assertive.push(item);
     else polite.push(item);
   });
 
@@ -540,6 +652,7 @@ export function Toaster({
       <section
         ref={region}
         aria-label={label ?? messages.toast.region}
+        aria-keyshortcuts={hotkey ?? undefined}
         className={cx(styles.region, className)}
         data-placement={placement}
         style={{ '--toast-rows': Math.max(items.length, 1) } as CSSProperties}
@@ -561,7 +674,8 @@ export function Toaster({
 /**
  * A toast written in JSX: shown while mounted and open, updated when its props change and removed
  * when it closes or unmounts (without calling onDismiss). Once the user or its timer dismissed it,
- * it shows again when the message or tone changes, or when it opens again.
+ * it shows again when the message or tone changes, or when it opens again. An imperative show
+ * with the same id takes the toast over; this Toast then leaves it alone.
  */
 export function Toast({ open = true, ...options }: ToastProps) {
   const store = useToastStore('Toast');
@@ -570,6 +684,7 @@ export function Toast({ open = true, ...options }: ToastProps) {
   const latest = useRef(options);
   latest.current = options;
   const dismissed = useRef<{ message: string; tone: ToastTone } | null>(null);
+  const [owner] = useState(() => ({}));
 
   const onDismiss = useCallback((reason: ToastDismissReason) => {
     dismissed.current = { message: latest.current.message, tone: toneOf(latest.current) };
@@ -579,21 +694,21 @@ export function Toast({ open = true, ...options }: ToastProps) {
   useEffect(() => {
     if (!open) return;
     dismissed.current = null;
-    store.show({ ...latest.current, id, onDismiss });
-    return () => store.withdraw(id);
-  }, [open, id, store, onDismiss]);
+    store.showOwned({ ...latest.current, id, onDismiss }, owner);
+    return () => store.withdraw(id, owner);
+  }, [open, id, store, onDismiss, owner]);
 
   useEffect(() => {
     if (!open) return;
     const next = { ...latest.current, id, onDismiss };
-    if (store.has(id)) {
-      store.replace(id, next);
+    if (store.owns(id, owner)) {
+      store.replace(id, next, owner);
     } else if (
       dismissed.current &&
       (dismissed.current.message !== next.message || dismissed.current.tone !== toneOf(next))
     ) {
       dismissed.current = null;
-      store.show(next);
+      store.showOwned(next, owner);
     }
   });
 

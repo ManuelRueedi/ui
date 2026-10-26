@@ -319,6 +319,8 @@ export const PhoneEdges: Story = {
     await step('A start-aligned panel at the right edge moves left', async () => {
       const { trigger, panel } = await open('Project');
       await expectOnScreen(panel);
+      // Capped by the viewport without a classic scroll bar (100vw would include it).
+      await expect(getComputedStyle(panel).maxWidth).toBe('calc(100% - 24px)');
       const rect = panel.getBoundingClientRect();
       await expect(rect.top).toBeGreaterThanOrEqual(trigger.bottom);
       await expect(rect.left).toBeLessThan(trigger.left);
@@ -546,17 +548,26 @@ export const EscapeOutside: Story = {
 
 function MenuInDialog() {
   const [open, setOpen] = useState(false);
+  const [systems, setSystems] = useState(false);
   return (
     <>
       <Button variant="primary" onClick={() => setOpen(true)}>
         Open dialog
       </Button>
       <Dialog open={open} onClose={() => setOpen(false)} title="Board UV2">
-        <div style={{ minHeight: 160 }}>
+        <div className="story-stack" style={{ minHeight: 160, alignContent: 'start' }}>
           <Menu label="Board tools" align="start">
             <MenuItem>Suggest busbars</MenuItem>
             <MenuItem>Print</MenuItem>
           </Menu>
+          {/* Opens a controlled menu while the focus stays on this button. */}
+          <div className="story-grid">
+            <Button onClick={() => setSystems(true)}>Show systems</Button>
+            <Menu label="Systems" align="start" open={systems} onOpenChange={setSystems}>
+              <MenuItem>Lighting</MenuItem>
+              <MenuItem>Sockets</MenuItem>
+            </Menu>
+          </div>
         </div>
       </Dialog>
     </>
@@ -581,8 +592,138 @@ export const InDialog: Story = {
     await waitFor(() => expect(trigger).toHaveFocus());
     await expect(dialog).toHaveAttribute('open');
     await expect(dialog).toBeVisible();
+
+    // Also when the menu opened while the focus stayed elsewhere in the dialog.
+    const show = within(dialog).getByRole('button', { name: 'Show systems' });
+    await userEvent.click(show);
+    const systems = within(dialog).getByRole('button', { name: 'Systems' });
+    await expect(systems).toHaveAttribute('aria-expanded', 'true');
+    await expect(show).toHaveFocus();
+    await userEvent.keyboard('{Escape}');
+    await expect(systems).toHaveAttribute('aria-expanded', 'false');
+    await expect(dialog).toHaveAttribute('open');
+    await expect(show).toHaveFocus();
+
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(within(document.body).queryByRole('dialog')).toBeNull());
+  },
+};
+
+/** Things that move or hide the trigger while its menu is open. */
+function MovingTriggers() {
+  const [status, setStatus] = useState(false);
+  const [banner, setBanner] = useState(false);
+  const [mounted, setMounted] = useState(true);
+  return (
+    <div className="story-stack" style={{ minHeight: 1400, alignContent: 'start', width: 360 }}>
+      {banner && (
+        <p className="story-note" style={{ height: 60, margin: 0 }}>
+          Synced
+        </p>
+      )}
+      <div className="story-grid" style={{ justifyContent: 'flex-end' }}>
+        {status && <span className="story-note">Saving changes…</span>}
+        {mounted && (
+          <Menu label="Project" align="end">
+            <MenuItem keepOpen onSelect={() => setStatus(true)}>
+              Save
+            </MenuItem>
+            <MenuItem keepOpen onSelect={() => setBanner(true)}>
+              Sync
+            </MenuItem>
+            <MenuItem onSelect={() => setMounted(false)}>Close project</MenuItem>
+          </Menu>
+        )}
+      </div>
+      <div
+        data-testid="scroller"
+        style={{ border: '1px solid var(--border-1)', height: 200, overflow: 'auto' }}
+      >
+        <div style={{ height: 100 }} />
+        <Menu label="Circuit" align="start">
+          <MenuItem>Rename</MenuItem>
+          <MenuItem>Delete</MenuItem>
+        </Menu>
+        <div style={{ height: 600 }} />
+      </div>
+    </div>
+  );
+}
+
+export const FollowsTrigger: Story = {
+  name: 'Follows a moving trigger',
+  tags: ['!autodocs'],
+  parameters: staticStory,
+  render: () => <MovingTriggers />,
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const near = (a: number, b: number) => expect(Math.abs(a - b)).toBeLessThan(1);
+    const project = canvas.getByRole('button', { name: 'Project' });
+    const panelOf = (trigger: HTMLElement) =>
+      document.getElementById(trigger.getAttribute('aria-controls') ?? '')!;
+    const projectPanel = panelOf(project);
+
+    await step('Content next to and above the trigger moves the panel with it', async () => {
+      await userEvent.click(project);
+      await waitFor(() => expect(projectPanel).toBeVisible());
+      const before = project.getBoundingClientRect();
+      // A status appears before the trigger, which moves without changing its size.
+      await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
+      await canvas.findByText('Saving changes…');
+      await waitFor(() =>
+        near(projectPanel.getBoundingClientRect().right, project.getBoundingClientRect().right),
+      );
+      // A line above pushes the trigger down; the panel stays below it.
+      await userEvent.click(canvas.getByRole('button', { name: 'Sync' }));
+      await canvas.findByText('Synced');
+      await expect(project.getBoundingClientRect().top).toBeGreaterThan(before.top + 50);
+      await waitFor(() =>
+        near(projectPanel.getBoundingClientRect().top, project.getBoundingClientRect().bottom + 4),
+      );
+      await userEvent.keyboard('{Escape}');
+      await expect(project).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    const circuit = canvas.getByRole('button', { name: 'Circuit' });
+    const circuitPanel = panelOf(circuit);
+    const scroller = canvas.getByTestId('scroller');
+    const followsCircuit = () =>
+      waitFor(() =>
+        near(circuitPanel.getBoundingClientRect().top, circuit.getBoundingClientRect().bottom + 4),
+      );
+
+    await step('Scrolling a box or the page moves the panel with the trigger', async () => {
+      await userEvent.click(circuit);
+      await waitFor(() => expect(circuitPanel).toBeVisible());
+      await followsCircuit();
+      scroller.scrollTop = 60;
+      await followsCircuit();
+      const page = document.scrollingElement ?? document.documentElement;
+      const pageTop = page.scrollTop;
+      window.scrollBy(0, 40);
+      await waitFor(() => expect(page.scrollTop).toBeGreaterThan(pageTop));
+      await followsCircuit();
+      window.scrollTo(0, pageTop);
+      await expect(circuit).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    await step('A trigger scrolled out of its box closes the menu', async () => {
+      scroller.scrollTop = 400;
+      await waitFor(() => expect(circuit).toHaveAttribute('aria-expanded', 'false'));
+      await expect(circuitPanel).not.toBeVisible();
+      await expect(document.querySelectorAll(':popover-open')).toHaveLength(0);
+      scroller.scrollTop = 0;
+    });
+
+    await step('A menu that unmounts while open leaves nothing in the top layer', async () => {
+      await userEvent.click(project);
+      await waitFor(() => expect(document.querySelectorAll(':popover-open')).toHaveLength(1));
+      await userEvent.click(canvas.getByRole('button', { name: 'Close project' }));
+      await waitFor(() =>
+        expect(canvas.queryByRole('button', { name: 'Project' })).not.toBeInTheDocument(),
+      );
+      await expect(document.querySelectorAll(':popover-open')).toHaveLength(0);
+    });
   },
 };
 

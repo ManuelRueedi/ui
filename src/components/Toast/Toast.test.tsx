@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { StrictMode, type ReactNode } from 'react';
+import { StrictMode, useState, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UiProvider } from '../../i18n/UiProvider';
 import {
@@ -241,7 +241,8 @@ describe('Toaster', () => {
     show({ message: 'Two', tone: 'error' });
     show({ message: 'Three' });
     expect(screen.queryByText('One')).toBeNull();
-    expect(dropped).toHaveBeenCalledExactlyOnceWith('replaced');
+    // Not 'replaced': that is the app's own show with the same id.
+    expect(dropped).toHaveBeenCalledExactlyOnceWith('overflow');
     expect(toastCount(region)).toBe(2);
     expect(region.style.getPropertyValue('--toast-rows')).toBe('2');
     // The rows interleave both live regions by age.
@@ -256,6 +257,147 @@ describe('Toaster', () => {
     expect(region).toHaveAttribute('data-placement', 'top');
     expect(toastOf('Two').style.getPropertyValue('--toast-row')).toBe('2');
     expect(toastOf('Three').style.getPropertyValue('--toast-row')).toBe('1');
+  });
+
+  it('pushes out toasts that time out before persistent ones', () => {
+    const { region } = renderToaster({ max: 3 });
+    const print = vi.fn();
+    show({
+      id: 'print',
+      message: 'Preparing print',
+      duration: null,
+      dismissible: false,
+      action: { label: 'Cancel', onClick: vi.fn() },
+      onDismiss: print,
+    });
+    show({ message: 'Upload failed', tone: 'error' });
+    show({ message: 'A', onDismiss: vi.fn() });
+    show({ message: 'B' });
+    show({ message: 'C' });
+    expect(toastCount(region)).toBe(3);
+    expect(toastOf('Preparing print')).toBeInTheDocument();
+    expect(toastOf('Upload failed')).toBeInTheDocument();
+    expect(screen.queryByText('A')).toBeNull();
+    expect(screen.queryByText('B')).toBeNull();
+    expect(print).not.toHaveBeenCalled();
+
+    show({ message: 'Offline', tone: 'warning', duration: null });
+    expect(screen.queryByText('C')).toBeNull();
+    expect(print).not.toHaveBeenCalled();
+    // Only persistent toasts left: the oldest of them goes.
+    show({ message: 'Sync paused', duration: null });
+    expect(screen.queryByText('Preparing print')).toBeNull();
+    expect(print).toHaveBeenCalledExactlyOnceWith('overflow');
+    expect(toastCount(region)).toBe(3);
+  });
+
+  it('keeps a toast that holds the focus or the pointer when more arrive', () => {
+    const { region } = renderToaster({ max: 2 }, <button type="button">Delete</button>);
+    const undo = vi.fn();
+    show({ message: 'Circuit deleted', action: { label: 'Undo', onClick: undo } });
+    const button = within(toastOf('Circuit deleted')).getByRole('button', { name: 'Undo' });
+    act(() => button.focus());
+    show({ message: 'A' });
+    show({ message: 'B' });
+    show({ message: 'C' });
+    expect(button).toHaveFocus();
+    expect(toastOf('Circuit deleted')).toBeInTheDocument();
+    expect(toastCount(region)).toBe(2);
+
+    act(() => screen.getByRole('button', { name: 'Delete' }).focus());
+    fireEvent.pointerOver(within(toastOf('C')).getByRole('button', { name: 'Dismiss' }));
+    show({ message: 'D' });
+    // The toast under the pointer stays; the older one without focus goes.
+    expect(toastOf('C')).toBeInTheDocument();
+    expect(screen.queryByText('Circuit deleted')).toBeNull();
+    show({ message: 'E' });
+    expect(toastOf('C')).toBeInTheDocument();
+    expect(screen.queryByText('D')).toBeNull();
+  });
+
+  it('changes the tone in place: same element, focus kept, announced at the new urgency', () => {
+    const { region } = renderToaster({}, <button type="button">Outside</button>);
+    const status = within(region).getByRole('status');
+    show({
+      id: 'save',
+      message: 'Saving',
+      duration: null,
+      action: { label: 'Cancel', onClick: vi.fn() },
+    });
+    const element = toastOf('Saving');
+    const action = within(element).getByRole('button', { name: 'Cancel' });
+    act(() => action.focus());
+    expect(element).not.toHaveAttribute('aria-live');
+
+    show({
+      id: 'save',
+      message: 'Save failed',
+      tone: 'error',
+      action: { label: 'Retry', onClick: vi.fn() },
+    });
+    expect(toastOf('Save failed')).toBe(element);
+    expect(element).toHaveAttribute('data-tone', 'error');
+    expect(action).toHaveAccessibleName('Retry');
+    expect(action).toHaveFocus();
+    // It stays in the status region but carries the alert's urgency itself.
+    expect(status).toContainElement(element);
+    expect(element).toHaveAttribute('aria-live', 'assertive');
+
+    act(() => api().update('save', { message: 'Saved', tone: 'success' }));
+    expect(toastOf('Saved')).toBe(element);
+    expect(action).toHaveFocus();
+    expect(element).not.toHaveAttribute('aria-live');
+
+    // An error that arrives as one starts in the alert region, and a later success is polite.
+    show({ id: 'upload', message: 'Upload failed', tone: 'error' });
+    const upload = toastOf('Upload failed');
+    expect(within(region).getByRole('alert')).toContainElement(upload);
+    act(() => api().update('upload', { message: 'Uploaded', tone: 'success' }));
+    expect(toastOf('Uploaded')).toBe(upload);
+    expect(upload).toHaveAttribute('aria-live', 'polite');
+  });
+
+  it('moves the focus to the newest toast with F8, which pauses the timers', () => {
+    vi.useFakeTimers();
+    const { region } = renderToaster({}, <button type="button">Plan</button>);
+    expect(region).toHaveAttribute('aria-keyshortcuts', 'F8');
+    const plan = screen.getByRole('button', { name: 'Plan' });
+    act(() => plan.focus());
+    // Nothing to reach: the key stays with the page.
+    expect(fireEvent.keyDown(plan, { key: 'F8' })).toBe(true);
+
+    show({ message: 'Copied', duration: 1000 });
+    show({ message: 'Circuit deleted', action: { label: 'Undo', onClick: vi.fn() } });
+    expect(fireEvent.keyDown(plan, { key: 'F8', shiftKey: true })).toBe(true);
+    expect(plan).toHaveFocus();
+    expect(fireEvent.keyDown(plan, { key: 'F8' })).toBe(false);
+    expect(toastOf('Circuit deleted')).toHaveFocus();
+    expect(region).toHaveAttribute('data-paused');
+    advance(10_000);
+    expect(toastOf('Copied')).toBeInTheDocument();
+
+    fireEvent.keyDown(toastOf('Circuit deleted'), { key: 'Escape' });
+    expect(screen.queryByText('Circuit deleted')).toBeNull();
+    expect(plan).toHaveFocus();
+  });
+
+  it('takes another hotkey, or none', () => {
+    const { rerender } = renderToaster({ hotkey: 'F6' });
+    show({ message: 'Saved', duration: null });
+    fireEvent.keyDown(document.body, { key: 'F8' });
+    expect(toastOf('Saved')).not.toHaveFocus();
+    fireEvent.keyDown(document.body, { key: 'F6' });
+    expect(toastOf('Saved')).toHaveFocus();
+
+    act(() => toastOf('Saved').blur());
+    rerender(
+      <Toaster hotkey={null}>
+        <Capture />
+      </Toaster>,
+    );
+    expect(screen.getByRole('region')).not.toHaveAttribute('aria-keyshortcuts');
+    expect(fireEvent.keyDown(document.body, { key: 'F6' })).toBe(true);
+    expect(toastOf('Saved')).not.toHaveFocus();
   });
 
   it('runs the action and closes unless closes is false', async () => {
@@ -427,6 +569,104 @@ describe('Toast', () => {
     expect(screen.getAllByText('Saved')).toHaveLength(1);
     advance(1000);
     expect(screen.queryByText('Saved')).toBeNull();
+  });
+
+  it('leaves alone a toast that an imperative show with its id put in its place', async () => {
+    function Saving() {
+      const toast = useToast();
+      const [saving, setSaving] = useState(true);
+      const [message, setMessage] = useState('Saving');
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              toast.show({ id: 'save', message: 'Saved', tone: 'success', duration: null });
+              setSaving(false);
+            }}
+          >
+            Finish
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              toast.show({ id: 'save', message: 'Saved', tone: 'success', duration: null });
+              setMessage('Saving');
+            }}
+          >
+            Take over
+          </button>
+          <button type="button" onClick={() => setMessage('Still saving')}>
+            Change
+          </button>
+          <Toast id="save" open={saving} message={message} duration={null} />
+        </>
+      );
+    }
+    render(
+      <Toaster>
+        <Saving />
+      </Toaster>,
+    );
+    expect(toastOf('Saving')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Finish' }));
+    // Closing the declarative Toast does not withdraw the toast that replaced it.
+    expect(toastOf('Saved')).toHaveAttribute('data-tone', 'success');
+    expect(screen.queryByText('Saving')).toBeNull();
+  });
+
+  it('does not overwrite an imperative toast with its id on a render', async () => {
+    function Saving() {
+      const toast = useToast();
+      const [count, setCount] = useState(0);
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              toast.show({ id: 'save', message: 'Saved', tone: 'success', duration: null })
+            }
+          >
+            Take over
+          </button>
+          <button type="button" onClick={() => setCount((value) => value + 1)}>
+            Render {count}
+          </button>
+          <Toast id="save" message="Saving" duration={null} details={`Render ${count}`} />
+        </>
+      );
+    }
+    render(
+      <Toaster>
+        <Saving />
+      </Toaster>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Take over' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Render/ }));
+    expect(toastOf('Saved')).toHaveAttribute('data-tone', 'success');
+    expect(screen.queryByText('Saving')).toBeNull();
+  });
+
+  it('keeps a persistent declarative toast when timed toasts push past max', () => {
+    vi.useFakeTimers();
+    const view = render(
+      <Toaster max={3}>
+        <Capture />
+        <Toast tone="warning" message="You are offline" duration={null} dismissible={false} />
+      </Toaster>,
+    );
+    show({ message: 'A', duration: 1000 });
+    show({ message: 'B', duration: 1000 });
+    show({ message: 'C', duration: 1000 });
+    expect(toastOf('You are offline')).toBeInTheDocument();
+    advance(1000);
+    view.rerender(
+      <Toaster max={3}>
+        <Capture />
+        <Toast tone="warning" message="You are offline" duration={null} dismissible={false} />
+      </Toaster>,
+    );
+    expect(toastOf('You are offline')).toBeInTheDocument();
   });
 
   it('keeps its timer through renders that change nothing it shows', () => {
