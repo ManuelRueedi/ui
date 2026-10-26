@@ -22,6 +22,32 @@ type Story = StoryObj<typeof meta>;
 const body = () => within(document.body);
 const region = (name = 'Notifications') => body().getByRole('region', { name });
 const toastOf = (element: HTMLElement) => element.closest<HTMLElement>('[data-tone]')!;
+/** The region's live container for a politeness: polite for most tones, assertive for errors. */
+const live = (politeness: 'polite' | 'assertive') =>
+  region().querySelector<HTMLElement>(`:scope > [aria-live="${politeness}"]`)!;
+
+/** Whether a print style rule that matches `element` sets display: none. */
+function hiddenInPrint(element: Element) {
+  return Array.from(document.styleSheets).some((sheet) => {
+    let rules: CSSRule[] = [];
+    try {
+      rules = Array.from(sheet.cssRules);
+    } catch {
+      // A style sheet from another origin cannot be read; ours are all local.
+    }
+    return rules.some(
+      (rule) =>
+        rule instanceof CSSMediaRule &&
+        rule.media.mediaText === 'print' &&
+        Array.from(rule.cssRules).some(
+          (inner) =>
+            inner instanceof CSSStyleRule &&
+            element.matches(inner.selectorText) &&
+            inner.style.display === 'none',
+        ),
+    );
+  });
+}
 
 /** Waits for the entry animation (it fades in), so checks see the final colours. */
 async function settled(element: HTMLElement) {
@@ -64,11 +90,16 @@ export const Tones: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    // The empty live containers carry no role, so an app's getByRole('status') finds its own.
+    await expect(within(region()).queryByRole('status')).toBeNull();
+    await expect(within(region()).queryByRole('alert')).toBeNull();
+    // Toasts stay off the printed page.
+    await expect(hiddenInPrint(region())).toBe(true);
     for (const name of ['Neutral', 'Success', 'Warning', 'Error']) {
       await userEvent.click(canvas.getByRole('button', { name }));
     }
-    const status = within(region()).getByRole('status');
-    const alert = within(region()).getByRole('alert');
+    const status = live('polite');
+    const alert = live('assertive');
     await expect(await findToast(toneMessages.neutral, status)).toBeVisible();
     await expect(await findToast(toneMessages.success, status)).toBeVisible();
     const warning = await findToast(toneMessages.warning, status);
@@ -156,8 +187,7 @@ export const WithDetails: Story = {
   ),
   play: async ({ canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole('button', { name: 'Save' }));
-    const alert = within(region()).getByRole('alert');
-    const toast = await findToast('The change was not saved', alert);
+    const toast = await findToast('The change was not saved', live('assertive'));
     await userEvent.click(within(toast).getByRole('button', { name: 'Technical details' }));
     await waitFor(() => expect(within(toast).getByText(technicalDetails)).toBeVisible());
   },
@@ -310,7 +340,7 @@ export const Declarative: Story = {
   play: async ({ canvasElement }) => {
     const toggle = within(canvasElement).getByRole('switch', { name: 'Offline' });
     await userEvent.click(toggle);
-    const toast = await findToast('You are offline', within(region()).getByRole('status'));
+    const toast = await findToast('You are offline', live('polite'));
     await expect(toast).toHaveAttribute('data-offline-toast');
     await expect(within(toast).queryByRole('button')).toBeNull();
     await userEvent.click(toggle);

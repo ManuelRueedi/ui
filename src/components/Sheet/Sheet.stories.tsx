@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Printer } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { darkA11y, staticStory, wait } from '../../stories/storyHelpers';
 import { Button } from '../Button/Button';
@@ -71,6 +71,27 @@ async function dragHandle(handle: HTMLElement, fromY: number, toY: number) {
   await wait(0);
   handle.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
   await wait(0);
+}
+
+/** Whether a style rule that matches `element` sets `property` to a value that contains `text`. */
+function ruleSets(element: Element, property: string, text: string) {
+  const visit = (rules: CSSRuleList): boolean =>
+    Array.from(rules).some((rule) => {
+      if (rule instanceof CSSStyleRule) {
+        return (
+          element.matches(rule.selectorText) && rule.style.getPropertyValue(property).includes(text)
+        );
+      }
+      return rule instanceof CSSGroupingRule && visit(rule.cssRules);
+    });
+  return Array.from(document.styleSheets).some((sheet) => {
+    try {
+      return visit(sheet.cssRules);
+    } catch {
+      // A style sheet from another origin cannot be read; ours are all local.
+      return false;
+    }
+  });
 }
 
 function AddSheet(
@@ -290,6 +311,27 @@ export const NonModalSnaps: Story = {
       await waitFor(() => expect(sheet.offsetHeight).toBe(232));
     });
 
+    await step('The handle is a 44 px tap target on touch screens', async () => {
+      await expect(sheet.querySelector('[data-sheet-handle]')).toBe(handle);
+      await expect(handle.offsetHeight).toBeGreaterThanOrEqual(24);
+      // Stands in for (pointer: coarse), where the tokens set --tap-target to 44px.
+      sheet.style.setProperty('--tap-target', '44px');
+      await expect(handle.offsetHeight).toBe(44);
+      sheet.style.removeProperty('--tap-target');
+    });
+
+    await step('In full the header keeps clear of the status bar', async () => {
+      const header = handle.closest('header')!;
+      await expect(ruleSets(header, 'padding-top', 'safe-area-inset-top')).toBe(false);
+      await userEvent.click(handle);
+      await expect(sheet).toHaveAttribute('data-snap', 'full');
+      // env(safe-area-inset-top) is 0 here; on a phone with viewport-fit=cover it is the status bar.
+      await expect(ruleSets(header, 'padding-top', 'safe-area-inset-top')).toBe(true);
+      await userEvent.click(handle);
+      await expect(sheet).toHaveAttribute('data-snap', 'peek');
+      await waitFor(() => expect(sheet.offsetHeight).toBe(232));
+    });
+
     await step('A drag up opens it in full, a drag down folds it', async () => {
       await dragHandle(handle, 640, 440);
       await expect(sheet).toHaveAttribute('data-snap', 'full');
@@ -313,14 +355,23 @@ export const InlineDesktop: Story = {
   globals: desktop,
   parameters: desktopParameters,
   render: () => (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 360px', height: 480 }}>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr) 360px',
+        height: 480,
+        position: 'relative',
+      }}
+    >
       <div className="story-stack" style={{ padding: 'var(--space-4)' }}>
         <p className="story-note">The plan</p>
       </div>
+      {/* contained is for the phone sheet; the wide inline column ignores it. */}
       <Sheet
         open
         modal={false}
         wide="inline"
+        contained
         defaultSnap="peek"
         role="complementary"
         title="Socket 3"
@@ -332,6 +383,10 @@ export const InlineDesktop: Story = {
           <Input label="Mounting height" defaultValue="30" suffix="cm" />
         </div>
       </Sheet>
+      {/* A positioned control of the page that reaches over the column. */}
+      <Button style={{ position: 'absolute', right: 'var(--space-4)', bottom: 'var(--space-4)' }}>
+        Zoom to fit
+      </Button>
     </div>
   ),
   play: async ({ canvasElement }) => {
@@ -344,6 +399,91 @@ export const InlineDesktop: Story = {
     await expect(panel.offsetWidth).toBe(360);
     await expect(panel.offsetHeight).toBe(480);
     await expect(within(panel).queryByRole('button', { name: 'Expand' })).toBeNull();
+    // No stacking layer of its own, so a positioned sibling over it still gets the press.
+    await expect(getComputedStyle(panel).zIndex).toBe('auto');
+    const zoom = canvas.getByRole('button', { name: 'Zoom to fit' });
+    const box = zoom.getBoundingClientRect();
+    await expect(box.left).toBeGreaterThan(panel.getBoundingClientRect().left);
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    await expect(zoom.contains(hit)).toBe(true);
+  },
+};
+
+export const AppHooks: Story = {
+  name: 'App heading and padding',
+  tags: ['!autodocs'],
+  globals: desktop,
+  parameters: desktopParameters,
+  render: () => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 360px', height: 480 }}>
+      {/* An app's own heading class, as a CSS Module gives it: one class, low specificity. */}
+      <style>{'.story-app-heading { font-size: 18px; line-height: 28px; }'}</style>
+      <div className="story-stack" style={{ padding: 'var(--space-4)' }}>
+        <p className="story-note">The plan</p>
+      </div>
+      <Sheet
+        open
+        modal={false}
+        wide="inline"
+        role="complementary"
+        title="Socket 3"
+        heading={<h2 className="story-app-heading">Socket 3, kitchen</h2>}
+        description="Socket outlet, 230 V"
+        footer={<Button variant="primary">Done</Button>}
+        style={
+          {
+            borderRadius: 0,
+            borderWidth: '0 0 0 1px',
+            '--sheet-body-padding': '0px',
+            '--sheet-footer-padding': 'var(--space-2)',
+          } as CSSProperties
+        }
+      >
+        <p className="story-note">Edge-to-edge content, e.g. a list with its own row padding.</p>
+      </Sheet>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const panel = canvas.getByRole('complementary', { name: 'Socket 3' });
+    // The app's heading keeps its own styles; the default title's rules do not reach into it.
+    const heading = within(panel).getByRole('heading', { name: 'Socket 3, kitchen' });
+    await expect(getComputedStyle(heading).fontSize).toBe('18px');
+    await expect(getComputedStyle(heading).lineHeight).toBe('28px');
+    await expect(getComputedStyle(heading).overflowWrap).toBe('normal');
+    // The padding hooks, and a stable gutter on the scrolling body.
+    const body = within(panel).getByText(/^Edge-to-edge/).parentElement!;
+    await expect(getComputedStyle(body).padding).toBe('0px');
+    await expect(getComputedStyle(body).scrollbarGutter).toBe('stable');
+    await expect(getComputedStyle(panel.querySelector('footer')!).padding).toBe('8px');
+  },
+};
+
+export const DefaultTitle: Story = {
+  name: 'Default title and padding',
+  tags: ['!dev', '!autodocs'],
+  globals: desktop,
+  parameters: desktopParameters,
+  render: () => (
+    <Sheet
+      open
+      modal={false}
+      wide="inline"
+      title="Junction box JB-2001-kitchen-north-wall"
+      description="Socket outlet, 230 V"
+      footer={<Button variant="primary">Done</Button>}
+    >
+      <p className="story-note">Content</p>
+    </Sheet>
+  ),
+  play: async ({ canvasElement }) => {
+    const panel = within(canvasElement).getByRole('region');
+    const heading = within(panel).getByRole('heading');
+    await expect(getComputedStyle(heading).fontSize).toBe('15px');
+    await expect(getComputedStyle(heading).overflowWrap).toBe('anywhere');
+    const body = within(panel).getByText('Content').parentElement!;
+    await expect(getComputedStyle(body).padding).toBe('16px');
+    await expect(getComputedStyle(panel.querySelector('footer')!).padding).toBe('12px 16px');
   },
 };
 

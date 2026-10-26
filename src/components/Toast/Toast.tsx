@@ -88,6 +88,10 @@ export type ToasterProps = {
   children?: ReactNode;
 };
 
+/**
+ * Pass `attributes`, `icon`, `details` and `action.onClick` as stable values (hoisted or
+ * memoized): each render compares them by identity, and a new value updates the shown toast.
+ */
 export type ToastProps = ToastOptions & {
   /** Shown while mounted and open. Default true. */
   open?: boolean;
@@ -453,15 +457,19 @@ class ToastStore {
 
 const ToasterContext = createContext<ToastStore | null>(null);
 
-function useToastStore(name: string): ToastStore {
+/** Shows, changes and removes toasts of the nearest Toaster. Throws outside a Toaster. */
+export function useToast(): ToastApi {
   const store = useContext(ToasterContext);
-  if (!store) throw new Error(`${name} must be used inside a Toaster`);
-  return store;
+  if (!store) throw new Error('useToast must be used inside a Toaster');
+  return store.api;
 }
 
-/** Shows, changes and removes toasts of the nearest Toaster. */
-export function useToast(): ToastApi {
-  return useToastStore('useToast').api;
+/**
+ * The same API as useToast, or null outside a Toaster (it never throws), for components that
+ * also render on their own: in unit tests, print copies or other apps without a Toaster.
+ */
+export function useOptionalToast(): ToastApi | null {
+  return useContext(ToasterContext)?.api ?? null;
 }
 
 const toneIcons = {
@@ -659,11 +667,16 @@ export function Toaster({
         onFocus={(event) => store.focusIn(event)}
         onBlur={(event) => store.focusOut(event)}
       >
-        {/* Both live regions exist before any toast, so screen readers announce the first one. */}
-        <div role="status" aria-live="polite" aria-atomic="false" className={styles.live}>
+        {/*
+          Both live regions exist before any toast, so screen readers announce the first one. They
+          are plain aria-live containers, not role="status" or role="alert": those roles would sit
+          empty on every page and match an app's own getByRole('status' | 'alert'). Each toast is
+          announced once, through the container it arrives in.
+        */}
+        <div aria-live="polite" aria-atomic="false" className={styles.live}>
           {polite}
         </div>
-        <div role="alert" aria-live="assertive" aria-atomic="false" className={styles.live}>
+        <div aria-live="assertive" aria-atomic="false" className={styles.live}>
           {assertive}
         </div>
       </section>
@@ -675,10 +688,15 @@ export function Toaster({
  * A toast written in JSX: shown while mounted and open, updated when its props change and removed
  * when it closes or unmounts (without calling onDismiss). Once the user or its timer dismissed it,
  * it shows again when the message or tone changes, or when it opens again. An imperative show
- * with the same id takes the toast over; this Toast then leaves it alone.
+ * with the same id takes the toast over; this Toast then leaves it alone. Outside a Toaster it
+ * renders nothing.
+ *
+ * Each render compares `attributes`, `icon` and `details` by identity, and `action` by its label,
+ * `closes` and the identity of its `onClick`: a new object, element or function updates the toast
+ * (its timer keeps running). Hoist or memoize them so unchanged renders change nothing.
  */
 export function Toast({ open = true, ...options }: ToastProps) {
-  const store = useToastStore('Toast');
+  const store = useContext(ToasterContext);
   const generatedId = useId();
   const id = options.id ?? `toast${generatedId}`;
   const latest = useRef(options);
@@ -692,14 +710,14 @@ export function Toast({ open = true, ...options }: ToastProps) {
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !store) return;
     dismissed.current = null;
     store.showOwned({ ...latest.current, id, onDismiss }, owner);
     return () => store.withdraw(id, owner);
   }, [open, id, store, onDismiss, owner]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !store) return;
     const next = { ...latest.current, id, onDismiss };
     if (store.owns(id, owner)) {
       store.replace(id, next, owner);

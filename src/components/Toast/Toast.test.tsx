@@ -6,6 +6,7 @@ import { UiProvider } from '../../i18n/UiProvider';
 import {
   Toast,
   Toaster,
+  useOptionalToast,
   useToast,
   type ToastApi,
   type ToastOptions,
@@ -57,6 +58,24 @@ function toastOf(text: string) {
 
 const toastCount = (region: HTMLElement) => region.querySelectorAll('[data-tone]').length;
 
+/** The region's two live containers: polite for most tones, assertive for errors. */
+function liveContainers(region: HTMLElement) {
+  const polite = region.querySelector<HTMLElement>(':scope > [aria-live="polite"]');
+  const assertive = region.querySelector<HTMLElement>(':scope > [aria-live="assertive"]');
+  if (!polite || !assertive) throw new Error('No live containers');
+  return { polite, assertive };
+}
+
+/** The live regions a toast is announced through: itself and its ancestors with aria-live. */
+function liveRegionsOf(toast: HTMLElement) {
+  const regions: string[] = [];
+  for (let node: HTMLElement | null = toast; node; node = node.parentElement) {
+    const live = node.getAttribute('aria-live');
+    if (live) regions.push(live);
+  }
+  return regions;
+}
+
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -64,16 +83,18 @@ afterEach(() => {
 });
 
 describe('Toaster', () => {
-  it('puts errors in the alert region and the other tones in the status region', () => {
+  it('puts errors in the assertive live region and the other tones in the polite one', () => {
     const { region } = renderToaster({ max: 4 });
-    const status = within(region).getByRole('status');
-    const alert = within(region).getByRole('alert');
+    const { polite: status, assertive: alert } = liveContainers(region);
     // Both live regions exist before the first toast, so it is announced.
     expect(status).toBeEmptyDOMElement();
     expect(alert).toBeEmptyDOMElement();
-    expect(status).toHaveAttribute('aria-live', 'polite');
     expect(status).toHaveAttribute('aria-atomic', 'false');
     expect(alert).toHaveAttribute('aria-atomic', 'false');
+    // The empty containers carry no status or alert role: an app's own getByRole('status') or
+    // getByRole('alert') on the page does not find them.
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
 
     for (const tone of ['neutral', 'success', 'warning', 'error'] as const) {
       show({ message: `${tone} message`, tone });
@@ -85,6 +106,10 @@ describe('Toaster', () => {
     expect(within(alert).getByText('error message')).toBeInTheDocument();
     expect(toastOf('error message')).toHaveAttribute('aria-atomic', 'true');
     expect(toastOf('warning message')).toHaveAttribute('aria-atomic', 'true');
+    // Each toast is announced once, through the one live region around it.
+    expect(liveRegionsOf(toastOf('neutral message'))).toEqual(['polite']);
+    expect(liveRegionsOf(toastOf('warning message'))).toEqual(['polite']);
+    expect(liveRegionsOf(toastOf('error message'))).toEqual(['assertive']);
   });
 
   it('never takes focus and names the region and the close button from the catalog', () => {
@@ -317,7 +342,7 @@ describe('Toaster', () => {
 
   it('changes the tone in place: same element, focus kept, announced at the new urgency', () => {
     const { region } = renderToaster({}, <button type="button">Outside</button>);
-    const status = within(region).getByRole('status');
+    const status = liveContainers(region).polite;
     show({
       id: 'save',
       message: 'Saving',
@@ -351,7 +376,7 @@ describe('Toaster', () => {
     // An error that arrives as one starts in the alert region, and a later success is polite.
     show({ id: 'upload', message: 'Upload failed', tone: 'error' });
     const upload = toastOf('Upload failed');
-    expect(within(region).getByRole('alert')).toContainElement(upload);
+    expect(liveContainers(region).assertive).toContainElement(upload);
     act(() => api().update('upload', { message: 'Uploaded', tone: 'success' }));
     expect(toastOf('Uploaded')).toBe(upload);
     expect(upload).toHaveAttribute('aria-live', 'polite');
@@ -515,6 +540,21 @@ describe('Toaster', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => render(<Capture />)).toThrow('useToast must be used inside a Toaster');
   });
+
+  it('gives useOptionalToast the same API inside a Toaster and null outside', () => {
+    const seen: Array<ToastApi | null> = [];
+    function Optional() {
+      seen.push(useOptionalToast());
+      return null;
+    }
+    render(<Optional />);
+    expect(seen).toEqual([null]);
+
+    renderToaster({}, <Optional />);
+    expect(seen.at(-1)).toBe(api());
+    show({ message: 'Saved' });
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+  });
 });
 
 function Declarative({ mounted = true, ...props }: ToastProps & { mounted?: boolean }) {
@@ -667,6 +707,16 @@ describe('Toast', () => {
       </Toaster>,
     );
     expect(toastOf('You are offline')).toBeInTheDocument();
+  });
+
+  it('renders nothing outside a Toaster, so a component can also render on its own', () => {
+    const { container } = render(
+      <section aria-label="Print copy">
+        <Toast message="Saved" tone="success" />
+      </section>,
+    );
+    expect(container.querySelector('[data-tone]')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Print copy' })).toBeEmptyDOMElement();
   });
 
   it('keeps its timer through renders that change nothing it shows', () => {

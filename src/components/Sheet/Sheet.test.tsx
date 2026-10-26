@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrictMode, Suspense, useRef, useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -196,6 +196,9 @@ describe('Sheet touch scrolling', () => {
     expect(view.sheet()).toHaveAttribute('data-snap', 'peek');
     expect(view.handle()).toHaveAttribute('aria-expanded', 'false');
     expect(view.handle()).toHaveAccessibleName('Expand');
+
+    // A stable hook for tests and automation, whatever the language of its label.
+    expect(view.sheet().querySelector('[data-sheet-handle]')).toBe(view.handle());
 
     view.toggle();
     expect(view.sheet()).toHaveAttribute('data-snap', 'full');
@@ -419,6 +422,37 @@ describe('Sheet touch scrolling', () => {
     expect(view.sheet()).toHaveAttribute('data-snap', 'full');
     expect(view.body().scrollTop).toBe(0);
     expect(view.sheet().scrollTop).toBe(0);
+  });
+
+  it('starts both scroll containers from the top when scrollKey changes at peek', () => {
+    const sheetFor = (scrollKey: string, item: string) => (
+      <Sheet
+        open
+        modal={false}
+        layout="phone"
+        defaultSnap="peek"
+        title="Selected cable"
+        scrollKey={scrollKey}
+      >
+        <p>{item}</p>
+      </Sheet>
+    );
+    const { rerender } = render(sheetFor('W1', 'Cable W1'));
+    const sheet = screen.getByRole('region', { name: 'Selected cable' });
+    const body = screen.getByText('Cable W1').parentElement!;
+    body.scrollTop = 40;
+    sheet.scrollTop = 50;
+
+    // A render with the same key keeps the place, e.g. while the user edits a field.
+    rerender(sheetFor('W1', 'Cable W1, edited'));
+    expect(body.scrollTop).toBe(40);
+    expect(sheet.scrollTop).toBe(50);
+
+    // Another selection, still at peek: both start from the top again.
+    rerender(sheetFor('W2', 'Cable W2'));
+    expect(sheet).toHaveAttribute('data-snap', 'peek');
+    expect(body.scrollTop).toBe(0);
+    expect(sheet.scrollTop).toBe(0);
   });
 
   it('follows a pointer drag on the handle and closes after a swipe down', () => {
@@ -919,6 +953,21 @@ describe('Sheet header', () => {
       .getAllByRole('button')
       .map((button) => button.textContent || button.getAttribute('aria-label'));
     expect(buttons).toEqual(['Socket 3', 'Print', 'Close']);
+  });
+
+  it('hands the close button to the caller, e.g. as initialFocus', () => {
+    function CloseFirst() {
+      const close = useRef<HTMLButtonElement>(null);
+      return (
+        <Sheet open title="Socket 3" initialFocus={close} closeRef={close}>
+          <input aria-label="Name" />
+        </Sheet>
+      );
+    }
+    render(<CloseFirst />);
+    const close = within(getDialog()).getByRole('button', { name: 'Close' });
+    expect(close).toHaveAttribute('data-sheet-close');
+    expect(close).toHaveFocus();
   });
 
   it('takes a role, a label and close label from the caller and can hide the close button', () => {

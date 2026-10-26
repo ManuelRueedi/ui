@@ -1,6 +1,8 @@
 /*
- * Hooks for apps: --sheet-z (non-modal stacking, default 30), --sheet-max-height (the tallest a
- * sheet gets) and --sheet-height (set by the component while it snaps or is dragged).
+ * Hooks for apps: --sheet-z (non-modal stacking, default 30; not for a wide inline column),
+ * --sheet-max-height (the tallest a sheet gets), --sheet-body-padding (default 16px),
+ * --sheet-footer-padding (default 12px 16px) and --sheet-height (set by the component while it
+ * snaps or is dragged).
  */
 
 .sheet {
@@ -50,7 +52,9 @@
   background-size: var(--loading-grid-size) var(--loading-grid-size);
 }
 
-.inplace {
+/* A wide inline column sits in the parent's flow: no stacking layer of its own. :where keeps the
+   specificity of .inplace, so an app's class still wins. */
+.inplace:not(:where(.wide-inline)) {
   z-index: var(--sheet-z, 30);
 }
 
@@ -76,7 +80,7 @@
   position: fixed;
 }
 
-.inplace.contained {
+.inplace.contained:not(:where(.wide-inline)) {
   position: absolute;
 }
 
@@ -95,6 +99,12 @@
 
 .snapping[data-snap='full'] {
   border-radius: 0;
+}
+
+/* Full fills the visual viewport, so its header keeps clear of the status bar (viewport-fit=cover).
+   A contained sheet fills the app's box, which keeps clear of it itself. */
+.snapping[data-snap='full']:not(.contained) .header {
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 .snapping[data-snap='peek'] .body {
@@ -176,7 +186,8 @@
   grid-column: 1 / -1;
   justify-content: center;
   margin: 0 calc(var(--space-4) * -1);
-  min-height: var(--space-6);
+  /* 44 px on touch screens, like the other controls. */
+  min-height: max(var(--space-6), var(--tap-target));
   padding: 0;
   touch-action: none;
 }
@@ -205,7 +216,8 @@
   min-width: 0;
 }
 
-.title h2 {
+/* Only the default title and description: content passed as heading keeps its own styles. */
+.heading {
   color: var(--fg-1);
   font-size: 15px;
   font-weight: var(--fw-semibold);
@@ -214,7 +226,7 @@
   overflow-wrap: anywhere;
 }
 
-.title p {
+.description {
   color: var(--fg-2);
   font-size: 13px;
   font-weight: var(--fw-regular);
@@ -234,7 +246,9 @@
   min-height: 0;
   min-width: 0;
   overflow: auto;
-  padding: var(--space-4);
+  padding: var(--sheet-body-padding, var(--space-4));
+  /* Content keeps its width when a classic scroll bar comes and goes (peek, full, longer text). */
+  scrollbar-gutter: stable;
 }
 
 .footer {
@@ -244,7 +258,7 @@
   flex-wrap: wrap;
   gap: var(--space-2);
   justify-content: flex-end;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--sheet-footer-padding, var(--space-3) var(--space-4));
 }
 
 /* On short screens a full sheet scrolls as a whole, so the header and footer leave room. */

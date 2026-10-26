@@ -4,6 +4,7 @@ import {
   Download,
   FileText,
   Filter,
+  Funnel,
   Layers,
   Map as MapIcon,
   RefreshCw,
@@ -12,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { darkA11y, staticStory } from '../../stories/storyHelpers';
+import { darkA11y, staticStory, wait } from '../../stories/storyHelpers';
 import { Button } from '../Button/Button';
 import { Checkbox } from '../Checkbox/Checkbox';
 import { Dialog } from '../Dialog/Dialog';
@@ -722,6 +723,63 @@ export const FollowsTrigger: Story = {
       await waitFor(() =>
         expect(canvas.queryByRole('button', { name: 'Project' })).not.toBeInTheDocument(),
       );
+      await expect(document.querySelectorAll(':popover-open')).toHaveLength(0);
+    });
+  },
+};
+
+/** A filter whose trigger gains a label once something is picked: IconButton becomes Button. */
+function PickSystem() {
+  const [picked, setPicked] = useState(false);
+  return (
+    <div
+      data-testid="scroller"
+      style={{ border: '1px solid var(--border-1)', height: 240, overflow: 'auto', width: 360 }}
+    >
+      <div style={{ height: 16 }} />
+      <Menu
+        ariaLabel="Systems"
+        icon={<Funnel size={16} strokeWidth={1.8} />}
+        label={picked ? 'Heat pump' : undefined}
+        align="start"
+        defaultOpen
+      >
+        <MenuItem keepOpen pressed={picked} onSelect={() => setPicked(true)}>
+          Pick heat pump
+        </MenuItem>
+      </Menu>
+      <div style={{ height: 800 }} />
+    </div>
+  );
+}
+
+export const RebuiltTrigger: Story = {
+  name: 'Trigger rebuilt while open',
+  tags: ['!autodocs'],
+  parameters: staticStory,
+  render: () => <PickSystem />,
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const iconTrigger = canvas.getByRole('button', { name: 'Systems' });
+    const pick = canvas.getByRole('button', { name: 'Pick heat pump' });
+
+    await step('The menu stays open when its trigger is rebuilt', async () => {
+      await expect(iconTrigger).toHaveAttribute('aria-expanded', 'true');
+      await userEvent.click(pick);
+      const trigger = canvas.getByRole('button', { name: 'Systems' });
+      await expect(trigger).not.toBe(iconTrigger);
+      await expect(trigger).toHaveTextContent('Heat pump');
+      // The old trigger, now detached, would read as out of sight a moment later.
+      await wait(300);
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      await expect(pick).toBeVisible();
+      await expect(pick).toHaveFocus();
+    });
+
+    await step('The new trigger scrolled out of sight closes the menu', async () => {
+      const trigger = canvas.getByRole('button', { name: 'Systems' });
+      canvas.getByTestId('scroller').scrollTop = 400;
+      await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
       await expect(document.querySelectorAll(':popover-open')).toHaveLength(0);
     });
   },

@@ -36,7 +36,10 @@ import styles from './Menu.module.css';
 type FocusTarget = 'first' | 'last' | 'trigger';
 
 export type MenuProps = {
-  /** Text on the trigger, with a chevron. Leave it out for an icon-only trigger. */
+  /**
+   * Text on the trigger, with a chevron. Leave it out for an icon-only trigger. It may come and go
+   * while the menu is open (e.g. to show the choice made inside); the menu stays open.
+   */
   label?: ReactNode;
   /** Icon on the trigger: before the label, or alone (three dots when neither is given). */
   icon?: ReactNode;
@@ -120,6 +123,8 @@ export function Menu({
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<FocusTarget | null>(null);
+  /** Points the open menu's visibility check at the trigger node rendered now. */
+  const watchTrigger = useRef<(() => void) | null>(null);
   const [open, setOpen] = useControllableState(openProp, defaultOpen, onOpenChange);
   const latestOpen = useRef(open);
   latestOpen.current = open;
@@ -245,10 +250,14 @@ export function Menu({
     // out of view (defaultOpen further down a page) stays open.
     let seen = false;
     const visibility =
-      typeof IntersectionObserver === 'undefined' || !trigger.current
+      typeof IntersectionObserver === 'undefined'
         ? undefined
         : new IntersectionObserver((entries) => {
-            const entry = entries.at(-1);
+            // A trigger rebuilt while open (an icon-only trigger that gains a label) leaves its
+            // old node detached, which reads as out of sight: only the current node counts.
+            const entry = entries
+              .filter((item) => item.target === trigger.current && item.target.isConnected)
+              .at(-1);
             if (!entry) return;
             if (entry.isIntersecting) {
               seen = true;
@@ -265,11 +274,21 @@ export function Menu({
             }
             close();
           });
-    if (trigger.current) visibility?.observe(trigger.current);
+    let watched: HTMLElement | null = null;
+    const watch = () => {
+      const current = trigger.current;
+      if (!visibility || current === watched) return;
+      if (watched) visibility.unobserve(watched);
+      watched = current;
+      if (current) visibility.observe(current);
+    };
+    watch();
+    watchTrigger.current = watch;
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', place);
       observer?.disconnect();
+      watchTrigger.current = null;
       visibility?.disconnect();
       setPopoverOpen(element, false);
       element.removeAttribute('popover');
@@ -282,6 +301,12 @@ export function Menu({
   useLayoutEffect(() => {
     if (open) place();
   }, [open, align, placement, place]);
+
+  // The trigger is rebuilt when it switches between IconButton and Button (label added or
+  // removed); an open menu then watches the new node.
+  useLayoutEffect(() => {
+    watchTrigger.current?.();
+  });
 
   // Moves the focus once the panel has opened (or closed).
   useEffect(() => {

@@ -48,7 +48,7 @@ export function App() {
 
 Avatar, Badge, Button, Card, Checkbox, Collapsible, Dialog, EditableSelect, Field, IconButton,
 Input, Menu, NavItem, PageLoading, SearchableSelect, SegmentControl, Select, Sheet, Sidebar,
-Textarea, Toast (with `Toaster` and `useToast`) and Tooltip, plus the `useSpotlight` hook for the
+Textarea, Toast (with `Toaster`, `useToast` and `useOptionalToast`) and Tooltip, plus the `useSpotlight` hook for the
 hover light on custom surfaces. Storybook shows every state in light and dark mode; its toolbar
 switches between the four languages.
 
@@ -93,7 +93,9 @@ scrolling and transition timing in their own components.
   to stay 12 px inside the window (without a classic scroll bar) and scrolls when it is taller
   than the room left. It follows the trigger when the trigger moves, also when content next to or
   above it changes, and the menu closes when the trigger is scrolled out of sight (out of a
-  scrolling box or off the page). Without popover support it stays the absolute panel under the
+  scrolling box or off the page). A trigger rebuilt while the menu is open (a `label` that comes
+  or goes switches between the icon-only and the labelled trigger) keeps the menu open, and the
+  new trigger is the one watched. Without popover support it stays the absolute panel under the
   trigger. Escape that closes the menu with the focus outside it is marked as used
   (defaultPrevented), so page-level Escape handlers that check it leave it alone; Dialog and
   Sheet do too.
@@ -106,8 +108,9 @@ scrolling and transition timing in their own components.
 - Button.wrap lets a long label break onto several lines, aligned to the start.
 - Input type="search" draws its own gray clear button instead of the browser's blue one; with
   forced colours (Windows High Contrast) it uses the system field text colour.
-- New: `Toaster`, `useToast()` and `<Toast>` for short status messages with an optional action
-  (see [Toasts](#toasts)). The catalogs gain `toast.region` and `toast.dismiss`.
+- New: `Toaster`, `useToast()`, `useOptionalToast()` and `<Toast>` for short status messages with
+  an optional action (see [Toasts](#toasts)). The catalogs gain `toast.region` and
+  `toast.dismiss`.
 - New: `Sheet`, a bottom sheet for phones: modal on the native dialog or non-modal in place,
   with optional peek and full snaps, a drag handle and swipe to close (see [Sheets](#sheets)).
   The catalogs gain `sheet.close`, `sheet.expand` and `sheet.collapse`.
@@ -125,6 +128,13 @@ toast.dismiss('save');
 
 <Toast open={offline} tone="warning" message="You are offline" duration={null} />;
 ```
+
+- `useToast()` throws outside a `Toaster`. `useOptionalToast()` returns the same API, or null
+  outside a `Toaster` (it never throws), and a `<Toast>` outside a `Toaster` renders nothing, so
+  components that also render on their own (unit tests, print copies) need no adapter.
+- A `<Toast>` compares `attributes`, `icon` and `details` by identity on each render, and
+  `action` by its label, `closes` and the identity of its `onClick`. A new object, element or
+  function updates the toast (its timer keeps running), so hoist or memoize them.
 
 - Tones: neutral and success stay grayscale with an icon; warning and error carry colour.
   Durations default to 5 s (neutral, success) and 8 s (warning); errors and `duration: null`
@@ -144,8 +154,11 @@ toast.dismiss('save');
   or re-rendering the `<Toast>` then leaves that toast alone.
 - The region sits in the top layer (a manual popover) and is shown again when a toast arrives,
   so it stays above top-layer content opened before. Not while a modal dialog or a popup (Menu
-  panel, list, tooltip) is open: toasts then stay below it. Errors go to a `role="alert"` region,
-  the other tones to a `role="status"` region. Toasts never take focus on their own; Escape
+  panel, list, tooltip) is open: toasts then stay below it. It is hidden in print. Errors go to
+  an `aria-live="assertive"` container, the other tones to an `aria-live="polite"` one. Both
+  exist before the first toast so it is announced, once; they carry no `status` or `alert` role,
+  so an app's own `getByRole('status')` or `getByRole('alert')` never matches the empty
+  containers. Toasts never take focus on their own; Escape
   closes the focused toast, and focus then returns to where it came from (a text field only
   after a keyboard dismissal).
 - F8 (`hotkey`, null turns it off; announced with aria-keyshortcuts) moves the focus to the
@@ -185,9 +198,10 @@ says 'phone' or 'wide'). The parent owns `open`:
   also under StrictMode and when Suspense shows the sheet again. Tab is not wrapped (native
   behaviour). Escape leaves content that used it (an open Menu) and a search field with text,
   which the browser clears.
-- Non-modal sheets render a labelled section in place, with the caller's className, data-\*
-  attributes and role on it: fixed at `--sheet-z` (30), or absolute in the nearest positioned
-  ancestor with `contained`. No backdrop, no focus move and no Escape handling.
+- Non-modal sheets render a labelled `<section>` in place (a region), with the caller's
+  className, data-\* attributes and role on it; pass a landmark role such as
+  `role="complementary"` for a side panel. They sit fixed at `--sheet-z` (30), or absolute in the
+  nearest positioned ancestor with `contained`. No backdrop, no focus move and no Escape handling.
 - `snap` / `defaultSnap` ('peek' | 'full') add a drag handle (a button with aria-expanded; click,
   Enter or Space toggles). Peek is `peekHeight` (232 px), at most 42% of the visual viewport but
   at least 196 px, and always 120 px below full; full fills the viewport. A contained sheet uses
@@ -197,13 +211,24 @@ says 'phone' or 'wide'). The parent owns `open`:
   The body does not drag on a sideways swipe (a scrolling row, a slider), in a top-layer popup
   inside it (a Menu panel, a list) or while an inner scroll area or text area can still scroll
   up. The rules are CircuitDocs' selection drawer's. Without snaps the sheet is as tall as its
-  content, at most `--sheet-max-height` (88dvh; 100% of the container when contained).
+  content, at most `--sheet-max-height` (88dvh; 100% of the container when contained). The
+  handle is 44 px tall on touch screens (`--tap-target`) and carries `data-sheet-handle`. In full
+  the header keeps clear of the status bar (`env(safe-area-inset-top)`, with
+  `viewport-fit=cover`); a contained sheet leaves that to its container.
+- `scrollKey` (e.g. the selected item's id) starts the body from the top whenever it changes,
+  also while the sheet stays open at peek; a new open and a fold to peek always do.
 - `onHeightChange(px)` reports the covered height on phones, also while dragging; 0 when wide,
   closed or unmounted. The root carries `data-layout`, `data-snap` and `data-dragging`.
 - Above the breakpoint `wide` picks a bottom sheet capped by `size` (360/520/720 px), a centred
-  dialog, or 'inline' (non-modal only: no positioning, the parent places it).
-- `heading` replaces the visible title (the title stays the name), `headerActions` sit before
-  the close button; `footer`, `hideClose`, `closeLabel`, `expandLabel` and `collapseLabel`.
+  dialog, or 'inline' (non-modal only: no positioning and no z-index, the parent places it in
+  its flow; `contained` and `--sheet-z` only apply to the phone sheet and the other wide looks).
+- `heading` replaces the visible title (the title stays the name; the default title's styles do
+  not reach into it), `headerActions` sit before the close button; `footer`, `hideClose`,
+  `closeLabel`, `expandLabel` and `collapseLabel`. `closeRef` reaches the close button (it
+  carries `data-sheet-close`), e.g. as `initialFocus`.
+- Style hooks: `--sheet-body-padding` (16px), `--sheet-footer-padding` (12px 16px),
+  `--sheet-max-height` and `--sheet-z`. The body keeps a stable scroll bar gutter, so content
+  does not shift when a classic scroll bar appears.
 
 ## Develop
 

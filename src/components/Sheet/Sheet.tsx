@@ -42,7 +42,10 @@ export type SheetProps = Omit<HTMLAttributes<HTMLElement>, 'title' | 'children' 
   /** The accessible name, shown as the heading unless `heading` replaces it. */
   title: string;
   description?: string;
-  /** Replaces the visible title, e.g. with a rename-in-place control. `title` stays the name. */
+  /**
+   * Replaces the visible title, e.g. with a rename-in-place control. `title` stays the name. The
+   * default title's styles do not reach into it, so it keeps the app's own heading styles.
+   */
   heading?: ReactNode;
   /** Shown before the close button, e.g. a Print button. */
   headerActions?: ReactNode;
@@ -50,21 +53,26 @@ export type SheetProps = Omit<HTMLAttributes<HTMLElement>, 'title' | 'children' 
   children?: ReactNode;
   /**
    * Modal sheets (the default) use the native <dialog> in the top layer with a backdrop; the page
-   * behind is inert. A non-modal sheet is a labelled section rendered in place: no backdrop, no
-   * focus move and no Escape handling, so the page stays usable.
+   * behind is inert. A non-modal sheet is a labelled <section> rendered in place (a region; pass
+   * a landmark role such as `complementary` for a side panel): no backdrop, no focus move and no
+   * Escape handling, so the page stays usable.
    */
   modal?: boolean;
   /**
    * The look above the phone breakpoint: a bottom sheet capped by `size`, a centred dialog, or
-   * `inline` (non-modal only; a modal sheet shows as `sheet` then): no positioning at all, so the
-   * parent places it, e.g. as a side panel.
+   * `inline` (non-modal only; a modal sheet shows as `sheet` then): no positioning and no
+   * z-index at all (`contained` and `--sheet-z` do not apply), so the parent places it in its
+   * flow, e.g. as a side panel.
    */
   wide?: 'sheet' | 'dialog' | 'inline';
   /** The width of a wide sheet or dialog: 360, 520 or 720 px. */
   size?: 'sm' | 'md' | 'lg';
   /** Overrides the layout, which otherwise follows (max-width: 760px). */
   layout?: 'phone' | 'wide';
-  /** Non-modal: positioned in the nearest positioned ancestor instead of the viewport. */
+  /**
+   * Non-modal: positioned in the nearest positioned ancestor instead of the viewport. It applies
+   * to the phone sheet and the wide `sheet` and `dialog` looks, not to a wide `inline` column.
+   */
   contained?: boolean;
   /**
    * Phone snaps with a drag handle: `peek` or `full`. Leave out snap and defaultSnap for a
@@ -91,8 +99,19 @@ export type SheetProps = Omit<HTMLAttributes<HTMLElement>, 'title' | 'children' 
    * false, so a parent can ignore a reason.
    */
   onClose?: (reason: SheetCloseReason) => void;
-  /** Modal: the element that gets the focus on open, instead of the first focusable one. */
+  /**
+   * Starts the body from the top whenever it changes, e.g. the id of the selected item: a sheet
+   * that stays open (and at peek) for a new selection then does not show the old scroll position.
+   * The first value does nothing; a new open always starts from the top.
+   */
+  scrollKey?: string | number;
+  /**
+   * Modal: the element that gets the focus on open, instead of the first focusable one. Pass
+   * `closeRef`'s ref to start on the close button.
+   */
   initialFocus?: RefObject<HTMLElement | null>;
+  /** The built-in close button (it carries `data-sheet-close`), e.g. for initialFocus. */
+  closeRef?: Ref<HTMLButtonElement>;
   hideClose?: boolean;
   closeLabel?: string;
   expandLabel?: string;
@@ -193,7 +212,9 @@ export function Sheet({
   onHeightChange,
   dismissible = true,
   onClose,
+  scrollKey,
   initialFocus,
+  closeRef,
   hideClose = false,
   closeLabel,
   expandLabel,
@@ -259,6 +280,14 @@ export function Sheet({
     if (body.current) body.current.scrollTop = 0;
     if (root.current) root.current.scrollTop = 0;
   }, []);
+
+  // A new scrollKey (another selection in a sheet that stays open) starts from the top.
+  const lastScrollKey = useRef(scrollKey);
+  useLayoutEffect(() => {
+    if (Object.is(lastScrollKey.current, scrollKey)) return;
+    lastScrollKey.current = scrollKey;
+    resetScroll();
+  }, [scrollKey, resetScroll]);
 
   const requestClose = useCallback((reason: SheetCloseReason) => {
     if (!latest.current.open) return;
@@ -610,6 +639,7 @@ export function Sheet({
           <button
             type="button"
             className={styles.handle}
+            data-sheet-handle=""
             aria-expanded={expanded}
             aria-label={
               expanded
@@ -627,15 +657,25 @@ export function Sheet({
           </button>
         )}
         <div className={styles.title}>
-          {heading ?? <h2 id={titleId}>{title}</h2>}
-          {description && <p id={descriptionId}>{description}</p>}
+          {heading ?? (
+            <h2 id={titleId} className={styles.heading}>
+              {title}
+            </h2>
+          )}
+          {description && (
+            <p id={descriptionId} className={styles.description}>
+              {description}
+            </p>
+          )}
         </div>
         {(headerActions || !hideClose) && (
           <div className={styles.actions}>
             {headerActions}
             {!hideClose && (
               <IconButton
+                ref={closeRef}
                 label={closeLabel ?? messages.sheet.close}
+                data-sheet-close=""
                 onClick={() => requestClose('button')}
               >
                 <X size={16} strokeWidth={1.9} />
