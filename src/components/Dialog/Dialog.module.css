@@ -98,6 +98,11 @@
   padding: var(--space-4);
 }
 
+/* A title on its own sits level with the close button. */
+.dialog-head.title-only {
+  align-items: center;
+}
+
 .dialog-title {
   display: grid;
   gap: var(--space-1);

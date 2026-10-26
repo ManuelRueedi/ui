@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Dialog, type DialogCloseReason } from './Dialog';
 
@@ -157,5 +157,46 @@ describe('Dialog', () => {
     // Still in the document, so the browser can return focus to the opener.
     expect(closedWhileConnected).toEqual([true]);
     expect(dialog).not.toHaveAttribute('open');
+  });
+
+  it('does not report a close when a Suspense boundary hides it, and opens again after', async () => {
+    // Browsers fire `close` in a later task, after React has finished hiding the tree.
+    dialogPrototype.close = vi.fn(function (this: HTMLDialogElement) {
+      if (!this.hasAttribute('open')) return;
+      this.removeAttribute('open');
+      setTimeout(() => this.dispatchEvent(new Event('close')));
+    });
+    const onClose = vi.fn();
+    let resolve = () => {};
+    const pending = new Promise<void>((done) => {
+      resolve = done;
+    });
+    let ready = false;
+    function Content({ wait }: { wait: boolean }) {
+      if (wait && !ready) throw pending;
+      return <p>Issues</p>;
+    }
+    const view = (wait: boolean) => (
+      <Suspense fallback={<p>Loading</p>}>
+        <Dialog open title="Health" onClose={onClose}>
+          <Content wait={wait} />
+        </Dialog>
+      </Suspense>
+    );
+    const { rerender } = render(view(false));
+    expect(getDialog()).toHaveAttribute('open');
+
+    rerender(view(true));
+    expect(getDialog()).not.toHaveAttribute('open');
+    await act(() => new Promise((done) => setTimeout(done)));
+
+    await act(async () => {
+      ready = true;
+      resolve();
+      await pending;
+    });
+    expect(screen.getByText('Issues')).toBeInTheDocument();
+    expect(getDialog()).toHaveAttribute('open');
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

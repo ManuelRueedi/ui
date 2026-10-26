@@ -83,11 +83,30 @@ export function Dialog({
     }
   }, [open, nativeCloses]);
 
+  // Closed by the layout cleanup below; that close is not the user's.
+  const hidden = useRef(false);
+  const layoutRuns = useRef(0);
+
   // Unmounting an open dialog closes it first, so the browser returns focus to the opener.
+  // A Suspense boundary that hides this tree runs the same cleanup and later runs the effect
+  // again: then the dialog opens again if the parent still has it open.
   useLayoutEffect(() => {
     const element = dialog.current;
+    layoutRuns.current += 1;
+    if (
+      layoutRuns.current > 1 &&
+      element &&
+      latest.current.open &&
+      !element.open &&
+      typeof element.showModal === 'function'
+    ) {
+      element.showModal();
+    }
     return () => {
-      if (element?.open && typeof element.close === 'function') element.close();
+      if (element?.open && typeof element.close === 'function') {
+        hidden.current = true;
+        element.close();
+      }
     };
   }, []);
 
@@ -112,6 +131,10 @@ export function Dialog({
         requestClose('escape');
       }}
       onClose={() => {
+        if (hidden.current) {
+          hidden.current = false;
+          return;
+        }
         const reported = closeReported.current;
         closeReported.current = false;
         // Native close events are queued: an earlier close must not undo a later reopen.
@@ -139,7 +162,7 @@ export function Dialog({
       }}
     >
       <div className={styles.surface}>
-        <header className={styles['dialog-head']}>
+        <header className={cx(styles['dialog-head'], !description && styles['title-only'])}>
           <div className={styles['dialog-title']}>
             <h2 id={titleId}>{title}</h2>
             {description && <p id={descriptionId}>{description}</p>}
