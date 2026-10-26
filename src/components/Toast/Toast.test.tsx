@@ -687,6 +687,54 @@ describe('Toast', () => {
     expect(screen.queryByText('Saving')).toBeNull();
   });
 
+  it('leaves a taken-over toast alone when its message or tone changes', async () => {
+    function Saving() {
+      const toast = useToast();
+      const [message, setMessage] = useState('Saving');
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              toast.show({ id: 'save', message: 'Saved', tone: 'success', duration: null })
+            }
+          >
+            Take over
+          </button>
+          <button type="button" onClick={() => setMessage('Saving 50%')}>
+            Progress
+          </button>
+          <button type="button" onClick={() => setOpen((value) => !value)}>
+            Toggle
+          </button>
+          <Toast
+            id="save"
+            open={open}
+            message={message}
+            tone={message === 'Saving' ? 'neutral' : 'warning'}
+            duration={null}
+          />
+        </>
+      );
+    }
+    render(
+      <Toaster>
+        <Saving />
+      </Toaster>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Take over' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Progress' }));
+    expect(toastOf('Saved')).toHaveAttribute('data-tone', 'success');
+    expect(screen.queryByText('Saving 50%')).toBeNull();
+    // Opening again shows the declarative toast in place of the imperative one.
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle' }));
+    expect(toastOf('Saved')).toHaveAttribute('data-tone', 'success');
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle' }));
+    expect(toastOf('Saving 50%')).toBeInTheDocument();
+    expect(screen.queryByText('Saved')).toBeNull();
+  });
+
   it('keeps a persistent declarative toast when timed toasts push past max', () => {
     vi.useFakeTimers();
     const view = render(

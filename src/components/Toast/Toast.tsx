@@ -688,8 +688,8 @@ export function Toaster({
  * A toast written in JSX: shown while mounted and open, updated when its props change and removed
  * when it closes or unmounts (without calling onDismiss). Once the user or its timer dismissed it,
  * it shows again when the message or tone changes, or when it opens again. An imperative show
- * with the same id takes the toast over; this Toast then leaves it alone. Outside a Toaster it
- * renders nothing.
+ * with the same id takes the toast over; this Toast then leaves it alone, whatever its props do,
+ * until it opens again. Outside a Toaster it renders nothing.
  *
  * Each render compares `attributes`, `icon` and `details` by identity, and `action` by its label,
  * `closes` and the identity of its `onClick`: a new object, element or function updates the toast
@@ -702,16 +702,20 @@ export function Toast({ open = true, ...options }: ToastProps) {
   const latest = useRef(options);
   latest.current = options;
   const dismissed = useRef<{ message: string; tone: ToastTone } | null>(null);
+  // Another show with this id took the toast over: leave it alone until this Toast opens again.
+  const replaced = useRef(false);
   const [owner] = useState(() => ({}));
 
   const onDismiss = useCallback((reason: ToastDismissReason) => {
-    dismissed.current = { message: latest.current.message, tone: toneOf(latest.current) };
+    if (reason === 'replaced') replaced.current = true;
+    else dismissed.current = { message: latest.current.message, tone: toneOf(latest.current) };
     latest.current.onDismiss?.(reason);
   }, []);
 
   useEffect(() => {
     if (!open || !store) return;
     dismissed.current = null;
+    replaced.current = false;
     store.showOwned({ ...latest.current, id, onDismiss }, owner);
     return () => store.withdraw(id, owner);
   }, [open, id, store, onDismiss, owner]);
@@ -722,6 +726,7 @@ export function Toast({ open = true, ...options }: ToastProps) {
     if (store.owns(id, owner)) {
       store.replace(id, next, owner);
     } else if (
+      !replaced.current &&
       dismissed.current &&
       (dismissed.current.message !== next.message || dismissed.current.tone !== toneOf(next))
     ) {
