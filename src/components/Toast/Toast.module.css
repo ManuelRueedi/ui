@@ -1,0 +1,163 @@
+/*
+ * The region is a popover in the browser's top layer, so cards, drawings and sheets with their own
+ * stacking context cannot cover it. Without popover support it stays fixed with a z-index.
+ * Apps keep it clear of their bars with --toast-offset-top and --toast-offset-bottom.
+ */
+.region {
+  background: transparent;
+  border: 0;
+  color: var(--fg-1);
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: minmax(0, 1fr);
+  /* One row per toast: both live regions share the rows, so tones interleave by age. */
+  grid-template-rows: repeat(var(--toast-rows, 1), auto);
+  height: auto;
+  inset: auto env(safe-area-inset-right, 0px) auto env(safe-area-inset-left, 0px);
+  margin: 0 auto;
+  max-height: none;
+  max-width: none;
+  overflow: visible;
+  padding: 0;
+  pointer-events: none;
+  position: fixed;
+  /* The full width less 16 px gutters on phones, at most 420 px otherwise. */
+  width: min(
+    420px,
+    calc(
+      100% - 2 * var(--space-4) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)
+    )
+  );
+  z-index: 1100;
+}
+
+.region[data-placement='bottom'] {
+  bottom: calc(var(--toast-offset-bottom, var(--space-4)) + env(safe-area-inset-bottom, 0px));
+}
+
+.region[data-placement='top'] {
+  top: calc(var(--toast-offset-top, var(--space-4)) + env(safe-area-inset-top, 0px));
+}
+
+.live {
+  display: grid;
+  grid-column: 1;
+  grid-row: 1 / -1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: subgrid;
+  min-width: 0;
+}
+
+.toast {
+  align-items: flex-start;
+  animation: enter-from-below var(--dur-slow) var(--ease-out);
+  background: var(--bg-1);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-1);
+  box-shadow: var(--shadow-popover);
+  color: var(--fg-1);
+  display: flex;
+  gap: var(--space-2);
+  grid-row: var(--toast-row);
+  min-width: 0;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  pointer-events: auto;
+}
+
+.region[data-placement='top'] .toast {
+  animation-name: enter-from-above;
+}
+
+/* Icon and first line sit level with the buttons, whose height grows on touch screens. */
+.icon,
+.content {
+  padding-block: calc((var(--control-height-sm) - 20px) / 2);
+}
+
+.icon {
+  align-items: center;
+  box-sizing: content-box;
+  color: var(--fg-2);
+  display: inline-flex;
+  flex: none;
+  height: 20px;
+}
+
+.content {
+  display: grid;
+  flex: 1 1 auto;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.message {
+  color: var(--fg-1);
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  line-height: 20px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.details {
+  color: var(--fg-2);
+  font-size: 12px;
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: var(--space-1);
+}
+
+.success .icon {
+  color: var(--success-fg);
+}
+
+.warning {
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+}
+
+.warning .icon {
+  color: var(--warning);
+}
+
+.error {
+  background: var(--error-bg);
+  border-color: var(--error-border);
+}
+
+.error .icon {
+  color: var(--error);
+}
+
+@keyframes enter-from-below {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-2));
+  }
+}
+
+@keyframes enter-from-above {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--space-2)));
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .region[data-placement='top'] .toast {
+    animation-name: fade-in;
+  }
+}

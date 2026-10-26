@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   type AnchorHTMLAttributes,
@@ -15,6 +16,17 @@ import {
 } from 'react';
 import { useUiMessages } from '../../i18n/UiProvider';
 import { cx } from '../../internal/cx';
+import {
+  anchoredPosition,
+  fitsOnSide,
+  isPopoverOpen,
+  oppositeSide,
+  roomOnSide,
+  setPopoverOpen,
+  shiftInside,
+  supportsPopover,
+  viewportBox,
+} from '../../internal/placement';
 import { useControllableState } from '../../internal/useControllableState';
 import { useSpotlight } from '../../internal/useSpotlight';
 import { Button } from '../Button/Button';
@@ -34,9 +46,15 @@ export type MenuProps = {
   size?: 'sm' | 'md';
   /** Marks the trigger as holding a choice, e.g. a filter that is on. */
   active?: boolean;
-  /** Which trigger edge the panel lines up with. */
-  align?: 'start' | 'end';
-  /** Opens the panel above the trigger, e.g. in a bottom bar. */
+  /**
+   * Which trigger edge the panel lines up with, or its middle. The panel moves along the trigger
+   * when it would leave the window.
+   */
+  align?: 'start' | 'center' | 'end';
+  /**
+   * Opens the panel above the trigger, e.g. in a bottom bar. The panel takes the other side when
+   * there is no room, and scrolls when neither side has room for all of it.
+   */
   placement?: 'bottom' | 'top';
   open?: boolean;
   defaultOpen?: boolean;
@@ -64,6 +82,14 @@ export function useMenu(): MenuContextValue {
 }
 
 const fieldSelector = 'input, select, textarea, [contenteditable="true"]';
+
+/** The tallest a panel gets on its own, as in the CSS: 70% of the window, at most 600px. */
+const maxPanelHeight = (viewportHeight: number) => Math.min(viewportHeight * 0.7, 600);
+
+function tokenLength(style: CSSStyleDeclaration, name: string, fallback: number) {
+  const value = Number.parseFloat(style.getPropertyValue(name));
+  return Number.isFinite(value) ? value : fallback;
+}
 
 /**
  * A button that opens a small panel of actions or settings.
@@ -97,6 +123,8 @@ export function Menu({
   const [open, setOpen] = useControllableState(openProp, defaultOpen, onOpenChange);
   const latestOpen = useRef(open);
   latestOpen.current = open;
+  const settings = useRef({ align, placement });
+  settings.current = { align, placement };
 
   const items = useCallback(
     () =>
@@ -131,6 +159,95 @@ export function Menu({
     [disabled, items, setOpen],
   );
 
+  // The open panel sits in the top layer, fixed next to the trigger, so sticky bars, clipping
+  // parents and higher z-indices cannot cover or cut it. It stays in the menu's DOM, so focus
+  // order and the outside checks do not change.
+  const place = useCallback(() => {
+    const element = panel.current;
+    const anchor = trigger.current;
+    if (!element || !anchor || !isPopoverOpen(element)) return;
+    const { align, placement } = settings.current;
+    const style = window.getComputedStyle(element);
+    const gap = tokenLength(style, '--space-1', 4);
+    const margin = tokenLength(style, '--space-3', 12);
+    const boundary = viewportBox(true);
+    const anchorBox = anchor.getBoundingClientRect();
+    // The height the panel wants: its content (scrollHeight ignores max-height) up to the cap.
+    const natural = {
+      width: element.offsetWidth,
+      height: Math.min(
+        element.scrollHeight + element.offsetHeight - element.clientHeight,
+        maxPanelHeight(boundary.height),
+      ),
+    };
+    const fits = (side: 'top' | 'bottom') =>
+      fitsOnSide(side, anchorBox, natural, boundary, gap, margin);
+    const room = (side: 'top' | 'bottom') => roomOnSide(side, anchorBox, boundary, gap, margin);
+    const other = oppositeSide(placement) as 'top' | 'bottom';
+    const side =
+      fits(placement) || (!fits(other) && room(placement) >= room(other)) ? placement : other;
+    const maxHeight = Math.max(
+      0,
+      Math.floor(Math.min(room(side), maxPanelHeight(boundary.height))),
+    );
+    element.style.setProperty('--menu-max-height', `${maxHeight}px`);
+
+    const size = { width: element.offsetWidth, height: element.offsetHeight };
+    const rtl = style.direction === 'rtl';
+    const edge = align === 'center' ? 'center' : (align === 'start') !== rtl ? 'start' : 'end';
+    const { x, y } = anchoredPosition(side, edge, anchorBox, size, gap);
+    const left = shiftInside(x, size.width, boundary.left, boundary.right, margin);
+    element.style.setProperty('--menu-x', `${Math.round(left)}px`);
+    element.style.setProperty('--menu-y', `${Math.round(y)}px`);
+  }, []);
+
+  useLayoutEffect(() => {
+    const element = panel.current;
+    if (!open || !element) return;
+    // Without popover support (jsdom, older browsers) the panel stays absolute under the trigger.
+    const topLayer = supportsPopover(element);
+    if (topLayer) {
+      // Set here rather than in the markup: jsdom's style sheet hides any [popover] element.
+      element.setAttribute('popover', 'manual');
+      setPopoverOpen(element, true);
+      place();
+    }
+    // A panel opens at its top: Chrome can show a long panel scrolled to its end.
+    element.scrollTop = 0;
+    if (!topLayer) return;
+    let frame = 0;
+    const placeSoon = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(place);
+    };
+    const placeOnScroll = (event: Event) => {
+      // Scrolling inside the panel does not move it.
+      if (event.target instanceof Node && element.contains(event.target)) return;
+      place();
+    };
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', placeOnScroll, true);
+    const observer =
+      typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(placeSoon);
+    observer?.observe(element);
+    if (trigger.current) observer?.observe(trigger.current);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', placeOnScroll, true);
+      observer?.disconnect();
+      setPopoverOpen(element, false);
+      element.removeAttribute('popover');
+      for (const name of ['--menu-x', '--menu-y', '--menu-max-height']) {
+        element.style.removeProperty(name);
+      }
+    };
+  }, [open, place]);
+
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open, align, placement, place]);
+
   // Moves the focus once the panel has opened (or closed).
   useEffect(() => {
     const target = pendingFocus.current;
@@ -146,17 +263,21 @@ export function Menu({
     const closeOutside = (event: Event) => {
       if (event.target instanceof Node && !root.current?.contains(event.target)) close();
     };
-    // Escape with the focus outside the menu; inside, handleRootKeyDown takes it first.
+    // Escape with the focus outside the menu (inside, handleRootKeyDown takes it). It runs in the
+    // capture phase and marks the key as used, so page-level Escape handlers leave it alone.
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !event.defaultPrevented) close();
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (event.target instanceof Node && root.current?.contains(event.target)) return;
+      event.preventDefault();
+      close();
     };
     document.addEventListener('pointerdown', closeOutside);
     document.addEventListener('focusin', closeOutside);
-    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('keydown', closeOnEscape, true);
     return () => {
       document.removeEventListener('pointerdown', closeOutside);
       document.removeEventListener('focusin', closeOutside);
-      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('keydown', closeOnEscape, true);
     };
   }, [open, close]);
 
@@ -275,13 +396,16 @@ export function Menu({
 
 type MenuItemCommon = {
   icon?: ReactNode;
-  /** A second, quieter line or trailing note, e.g. a storey next to a room. */
+  /** A quieter trailing note, e.g. a storey next to a room. */
   detail?: ReactNode;
-  /** Marks the entry that is shown or chosen now. */
-  current?: boolean;
+  /** A second line under the label, read out as the item's description, e.g. why it is off. */
+  description?: ReactNode;
+  /** Marks the entry that is shown or chosen now; `page`, `location` or `step` say what kind. */
+  current?: boolean | 'page' | 'location' | 'step';
   /** Runs the action; the menu then closes unless keepOpen is set. */
   onSelect?: (event: ReactMouseEvent<HTMLElement>) => void;
   keepOpen?: boolean;
+  /** With a description, the item stays focusable so the keyboard reaches the reason. */
   disabled?: boolean;
   className?: string;
   children?: ReactNode;
@@ -289,15 +413,20 @@ type MenuItemCommon = {
 
 export type MenuItemProps = MenuItemCommon &
   (
-    | ({ href?: undefined } & Omit<
-        ButtonHTMLAttributes<HTMLButtonElement>,
-        keyof MenuItemCommon | 'onClick'
-      >)
-    | ({ href: string } & Omit<
+    | ({
+        href?: undefined;
+        /** Makes the item a toggle that is on (true) or off (false), e.g. a layer shown on the plan. */
+        pressed?: boolean;
+      } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, keyof MenuItemCommon | 'onClick'>)
+    | ({ href: string; pressed?: undefined } & Omit<
         AnchorHTMLAttributes<HTMLAnchorElement>,
         keyof MenuItemCommon | 'onClick'
       >)
   );
+
+function hasContent(node: ReactNode) {
+  return node !== undefined && node !== null && node !== false && node !== '';
+}
 
 /** One action in a Menu. Arrow keys move between items. */
 export function MenuItem(props: MenuItemProps) {
@@ -305,6 +434,7 @@ export function MenuItem(props: MenuItemProps) {
   const {
     icon,
     detail,
+    description,
     current,
     onSelect,
     keepOpen,
@@ -312,7 +442,10 @@ export function MenuItem(props: MenuItemProps) {
     className,
     children,
   } = props;
+  const descriptionId = `menu-item-description-${useId()}`;
+  const described = hasContent(description);
   const ref = useSpotlight<HTMLElement>({ keyboard: true, disabled });
+  const label = <span className={styles['item-label']}>{children}</span>;
   const content = (
     <>
       {icon && (
@@ -320,7 +453,17 @@ export function MenuItem(props: MenuItemProps) {
           {icon}
         </span>
       )}
-      <span className={styles['item-label']}>{children}</span>
+      {described ? (
+        <span className={styles['item-text']}>
+          {label}
+          {/* Hidden from the name only; aria-describedby still reads it. */}
+          <span id={descriptionId} className={styles['item-description']} aria-hidden="true">
+            {description}
+          </span>
+        </span>
+      ) : (
+        label
+      )}
       {detail && <span className={styles['item-detail']}>{detail}</span>}
     </>
   );
@@ -335,7 +478,8 @@ export function MenuItem(props: MenuItemProps) {
   const shared = {
     className: cx(styles.item, className),
     'data-menu-item': '',
-    'aria-current': current ? ('true' as const) : undefined,
+    'aria-current': current === true ? ('true' as const) : current || props['aria-current'],
+    'aria-describedby': cx(described && descriptionId, props['aria-describedby']) || undefined,
     onClick: handleClick,
   };
 
@@ -343,12 +487,14 @@ export function MenuItem(props: MenuItemProps) {
     const {
       icon: _icon,
       detail: _detail,
+      description: _description,
       current: _current,
       onSelect: _onSelect,
       keepOpen: _keepOpen,
       disabled: _disabled,
       className: _className,
       children: _children,
+      pressed: _pressed,
       ...rest
     } = props;
     return (
@@ -356,8 +502,8 @@ export function MenuItem(props: MenuItemProps) {
         {...rest}
         {...shared}
         ref={ref}
-        aria-disabled={disabled || undefined}
-        tabIndex={disabled ? -1 : rest.tabIndex}
+        aria-disabled={disabled || rest['aria-disabled']}
+        tabIndex={disabled && !described ? -1 : rest.tabIndex}
       >
         {content}
       </a>
@@ -367,6 +513,7 @@ export function MenuItem(props: MenuItemProps) {
   const {
     icon: _icon,
     detail: _detail,
+    description: _description,
     current: _current,
     onSelect: _onSelect,
     keepOpen: _keepOpen,
@@ -374,11 +521,22 @@ export function MenuItem(props: MenuItemProps) {
     className: _className,
     children: _children,
     href: _href,
+    pressed,
     type = 'button',
     ...rest
   } = props;
+  // A disabled item with a reason stays focusable and in the arrow order; clicks still do nothing.
+  const focusableWhileDisabled = disabled && described;
   return (
-    <button {...rest} {...shared} ref={ref} type={type} disabled={disabled}>
+    <button
+      {...rest}
+      {...shared}
+      ref={ref}
+      type={type}
+      disabled={disabled && !focusableWhileDisabled}
+      aria-disabled={focusableWhileDisabled || rest['aria-disabled']}
+      aria-pressed={pressed ?? rest['aria-pressed']}
+    >
       {content}
     </button>
   );

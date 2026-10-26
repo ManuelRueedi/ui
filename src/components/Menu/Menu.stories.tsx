@@ -1,6 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Download, FileText, Filter, RefreshCw, Share2, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import {
+  Bug,
+  Download,
+  FileText,
+  Filter,
+  Layers,
+  Map as MapIcon,
+  RefreshCw,
+  Share2,
+  Trash2,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { darkA11y, staticStory } from '../../stories/storyHelpers';
 import { Button } from '../Button/Button';
@@ -19,7 +29,7 @@ const meta = {
   argTypes: {
     variant: { control: 'radio', options: ['ghost', 'secondary'] },
     size: { control: 'radio', options: ['sm', 'md'] },
-    align: { control: 'radio', options: ['start', 'end'] },
+    align: { control: 'radio', options: ['start', 'center', 'end'] },
     placement: { control: 'radio', options: ['bottom', 'top'] },
   },
   render: (args) => (
@@ -187,10 +197,14 @@ export const Variants: Story = {
           <MenuItem>Item</MenuItem>
         </Menu>
       </div>
-      <div style={{ marginTop: 140 }}>
+      <div style={{ marginTop: 140, display: 'flex', gap: 220 }}>
         <Menu label="Opens upwards" placement="top" align="start" defaultOpen>
           <MenuItem icon={<Trash2 size={15} strokeWidth={1.8} />}>Delete</MenuItem>
           <MenuItem>Rename</MenuItem>
+        </Menu>
+        <Menu label="Centred" placement="top" align="center" defaultOpen>
+          <MenuItem current>Plan</MenuItem>
+          <MenuItem>Side view</MenuItem>
         </Menu>
       </div>
     </div>
@@ -203,6 +217,330 @@ export const Variants: Story = {
       'true',
     );
     await expect(canvas.getByRole('button', { name: 'Delete' })).toBeVisible();
+    // The centred panel sits on the middle of its trigger, above it.
+    const trigger = canvas.getByRole('button', { name: 'Centred' }).getBoundingClientRect();
+    const panel = canvas.getByRole('group', { name: 'Centred' }).getBoundingClientRect();
+    await expect(
+      Math.abs(panel.left + panel.width / 2 - (trigger.left + trigger.width / 2)),
+    ).toBeLessThan(1);
+    await expect(panel.bottom).toBeLessThanOrEqual(trigger.top);
+  },
+};
+
+const phoneParameters = {
+  ...staticStory,
+  canvasLayout: 'fullscreen',
+  viewport: {
+    options: { phone: { name: 'Phone', styles: { width: '390px', height: '844px' } } },
+  },
+};
+
+const rooms = [
+  'Entrance',
+  'Living room',
+  'Kitchen',
+  'Pantry',
+  'Bathroom',
+  'Bedroom',
+  'Children’s room',
+  'Office',
+  'Laundry',
+  'Cellar',
+  'Garage',
+  'Attic',
+  'Balcony',
+  'Terrace',
+  'Hallway upstairs',
+];
+
+/** Triggers in the corners of a phone frame that clips its content. */
+function EdgeMenus() {
+  return (
+    <div style={{ position: 'relative', height: '100dvh', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', top: 8, right: 8 }}>
+        <Menu label="Project" variant="secondary" align="start">
+          <MenuItem icon={<Share2 size={15} strokeWidth={1.8} />}>Share with the client</MenuItem>
+          <MenuItem icon={<Download size={15} strokeWidth={1.8} />}>Export a copy</MenuItem>
+        </Menu>
+      </div>
+      <div style={{ position: 'absolute', top: 300, left: 8 }}>
+        <Menu label="Rooms" variant="secondary" align="start">
+          {rooms.map((room) => (
+            <MenuItem key={room}>{room}</MenuItem>
+          ))}
+        </Menu>
+      </div>
+      <div style={{ position: 'absolute', bottom: 8, right: 8 }}>
+        <Menu label="Tools" variant="secondary">
+          <MenuItem>Measure</MenuItem>
+          <MenuItem>Print</MenuItem>
+        </Menu>
+      </div>
+      <div style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)' }}>
+        <Menu label="View" variant="secondary" placement="top" align="center">
+          <MenuItem icon={<MapIcon size={15} strokeWidth={1.8} />} current>
+            Floor plan
+          </MenuItem>
+          <MenuItem icon={<Layers size={15} strokeWidth={1.8} />}>Circuit diagram</MenuItem>
+        </Menu>
+      </div>
+    </div>
+  );
+}
+
+/** Asserts that the open panel stays the given margin inside the window. */
+async function expectOnScreen(panel: HTMLElement, margin = 12) {
+  const rect = panel.getBoundingClientRect();
+  const { clientWidth, clientHeight } = document.documentElement;
+  await expect(rect.left).toBeGreaterThanOrEqual(margin - 0.5);
+  await expect(rect.right).toBeLessThanOrEqual(clientWidth - margin + 0.5);
+  await expect(rect.top).toBeGreaterThanOrEqual(margin - 0.5);
+  await expect(rect.bottom).toBeLessThanOrEqual(clientHeight - margin + 0.5);
+}
+
+export const PhoneEdges: Story = {
+  name: 'Near the edges on a phone',
+  tags: ['!autodocs'],
+  globals: { viewport: { value: 'phone' } },
+  parameters: phoneParameters,
+  render: () => <EdgeMenus />,
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    await expect(window.innerWidth).toBe(390);
+    const open = async (name: string) => {
+      const trigger = canvas.getByRole('button', { name });
+      await userEvent.click(trigger);
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      const panel = canvas.getByRole('group', { name });
+      await waitFor(() => expect(panel).toBeVisible());
+      return { trigger: trigger.getBoundingClientRect(), panel };
+    };
+
+    await step('A start-aligned panel at the right edge moves left', async () => {
+      const { trigger, panel } = await open('Project');
+      await expectOnScreen(panel);
+      const rect = panel.getBoundingClientRect();
+      await expect(rect.top).toBeGreaterThanOrEqual(trigger.bottom);
+      await expect(rect.left).toBeLessThan(trigger.left);
+    });
+
+    await step('A long list takes the side with more room and scrolls', async () => {
+      const { trigger, panel } = await open('Rooms');
+      await expectOnScreen(panel);
+      await expect(panel.getBoundingClientRect().top).toBeGreaterThanOrEqual(trigger.bottom);
+      await expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight);
+      // It opens at the top of the list.
+      await expect(panel.scrollTop).toBe(0);
+      // Arrow keys still reach the last room, scrolled into view.
+      await userEvent.keyboard('{ArrowUp}');
+      const last = canvas.getByRole('button', { name: 'Hallway upstairs' });
+      await expect(last).toHaveFocus();
+      await expect(last.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        panel.getBoundingClientRect().bottom,
+      );
+    });
+
+    await step('A panel with no room below flips above the trigger', async () => {
+      const { trigger, panel } = await open('Tools');
+      await expectOnScreen(panel);
+      const rect = panel.getBoundingClientRect();
+      await expect(rect.bottom).toBeLessThanOrEqual(trigger.top);
+      await expect(rect.right).toBeLessThanOrEqual(trigger.right + 0.5);
+    });
+
+    await step('A centred panel above a bottom bar stays centred', async () => {
+      const { trigger, panel } = await open('View');
+      await expectOnScreen(panel);
+      const rect = panel.getBoundingClientRect();
+      await expect(rect.bottom).toBeLessThanOrEqual(trigger.top);
+      await expect(
+        Math.abs(rect.left + rect.width / 2 - (trigger.left + trigger.width / 2)),
+      ).toBeLessThan(1);
+      await userEvent.keyboard('{Escape}');
+      await expect(panel).not.toBeVisible();
+    });
+  },
+};
+
+function ToolbarMenu() {
+  return (
+    <div style={{ height: 320, position: 'relative', width: 360 }}>
+      <div
+        data-testid="toolbar"
+        style={{
+          alignItems: 'center',
+          backdropFilter: 'blur(6px)',
+          border: '1px solid var(--border-1)',
+          display: 'flex',
+          height: 48,
+          overflow: 'hidden',
+          padding: '0 var(--space-2)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 8,
+        }}
+      >
+        <Menu label="Document tools" align="start">
+          <MenuItem>Print</MenuItem>
+          <MenuItem>Export a copy</MenuItem>
+          <MenuItem>Page setup</MenuItem>
+        </Menu>
+      </div>
+      <div
+        data-testid="drawing-tools"
+        style={{
+          background: 'var(--bg-3)',
+          height: 200,
+          marginTop: 8,
+          position: 'relative',
+          zIndex: 12,
+        }}
+      />
+    </div>
+  );
+}
+
+export const InToolbar: Story = {
+  name: 'Inside a clipping toolbar',
+  parameters: staticStory,
+  render: () => <ToolbarMenu />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Document tools' }));
+    const panel = canvas.getByRole('group', { name: 'Document tools' });
+    await waitFor(() => expect(panel).toBeVisible());
+    // The panel reaches past the toolbar that clips and blurs, and above the higher layer below.
+    const toolbar = canvas.getByTestId('toolbar').getBoundingClientRect();
+    await expect(panel.getBoundingClientRect().bottom).toBeGreaterThan(toolbar.bottom);
+    const item = canvas.getByRole('button', { name: 'Page setup' });
+    const rect = item.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    await expect(item.contains(hit)).toBe(true);
+    await userEvent.click(item);
+    await expect(panel).not.toBeVisible();
+  },
+};
+
+function ViewsMenu() {
+  const [debug, setDebug] = useState(false);
+  return (
+    <div style={{ minHeight: 380 }}>
+      <Menu label="Views" align="start">
+        <MenuLabel>Open</MenuLabel>
+        <MenuItem icon={<FileText size={15} strokeWidth={1.8} />} current="page">
+          Overview
+        </MenuItem>
+        <MenuItem icon={<MapIcon size={15} strokeWidth={1.8} />} description="Shared by Anna">
+          Floor plan
+        </MenuItem>
+        <MenuItem
+          icon={<Layers size={15} strokeWidth={1.8} />}
+          disabled
+          description="Anna is editing it"
+        >
+          Circuit diagram
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem
+          icon={<Bug size={15} strokeWidth={1.8} />}
+          pressed={debug}
+          keepOpen
+          onSelect={() => setDebug(!debug)}
+        >
+          Compiler debug
+        </MenuItem>
+      </Menu>
+    </div>
+  );
+}
+
+export const States: Story = {
+  name: 'Current, toggles and reasons',
+  parameters: staticStory,
+  render: () => <ViewsMenu />,
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: 'Views' });
+    trigger.focus();
+    await userEvent.keyboard('{ArrowDown}');
+    const overview = canvas.getByRole('button', { name: 'Overview' });
+    await waitFor(() => expect(overview).toHaveFocus());
+    await expect(overview).toHaveAttribute('aria-current', 'page');
+
+    await step('Descriptions are read out, also on a disabled item', async () => {
+      await userEvent.keyboard('{ArrowDown}');
+      const floorPlan = canvas.getByRole('button', { name: 'Floor plan' });
+      await expect(floorPlan).toHaveFocus();
+      await expect(floorPlan).toHaveAccessibleDescription('Shared by Anna');
+      await userEvent.keyboard('{ArrowDown}');
+      const diagram = canvas.getByRole('button', { name: 'Circuit diagram' });
+      await expect(diagram).toHaveFocus();
+      await expect(diagram).toHaveAttribute('aria-disabled', 'true');
+      await expect(diagram).toHaveAccessibleDescription('Anna is editing it');
+      await userEvent.keyboard('{Enter}');
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    await step('A toggle shows the same look as the current entry', async () => {
+      await userEvent.keyboard('{ArrowDown}');
+      const debug = canvas.getByRole('button', { name: 'Compiler debug' });
+      await expect(debug).toHaveFocus();
+      await expect(debug).toHaveAttribute('aria-pressed', 'false');
+      await userEvent.keyboard('{Enter}');
+      await expect(debug).toHaveAttribute('aria-pressed', 'true');
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      const pressed = getComputedStyle(debug);
+      const current = getComputedStyle(overview);
+      await expect(pressed.fontWeight).toBe(current.fontWeight);
+      // After the short background transition.
+      await waitFor(() => expect(pressed.backgroundColor).toBe(current.backgroundColor));
+      await expect(pressed.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+      await userEvent.keyboard('{Escape}');
+      await waitFor(() => expect(trigger).toHaveFocus());
+    });
+  },
+};
+
+/** A page-level Escape handler that leaves keys alone that something else used. */
+function PageEscape() {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const clearSelection = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) setCount((value) => value + 1);
+    };
+    document.addEventListener('keydown', clearSelection);
+    return () => document.removeEventListener('keydown', clearSelection);
+  }, []);
+  return (
+    <div className="story-stack" style={{ minHeight: 220, alignContent: 'start' }}>
+      <p className="story-note" role="status">
+        Selection cleared {count} times
+      </p>
+      <Menu label="Selection tools" align="start">
+        <MenuItem>Copy</MenuItem>
+        <MenuItem>Delete</MenuItem>
+      </Menu>
+    </div>
+  );
+}
+
+export const EscapeOutside: Story = {
+  name: 'Escape with the focus outside',
+  parameters: staticStory,
+  render: () => <PageEscape />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: 'Selection tools' });
+    await userEvent.click(trigger);
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    // Some browsers do not focus a button on click; the focus stays on the page.
+    trigger.blur();
+    await userEvent.keyboard('{Escape}');
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await expect(canvas.getByRole('status')).toHaveTextContent('Selection cleared 0 times');
+    // With the menu closed, the page gets Escape.
+    await userEvent.keyboard('{Escape}');
+    await expect(canvas.getByRole('status')).toHaveTextContent('Selection cleared 1 times');
   },
 };
 
@@ -257,6 +595,9 @@ export const German: Story = {
       <Menu {...args}>
         <MenuItem>Teilen</MenuItem>
         <MenuItem>Dokumente</MenuItem>
+        <MenuItem disabled description="Anna bearbeitet es gerade">
+          Stromlaufschema
+        </MenuItem>
       </Menu>
     </div>
   ),
@@ -264,6 +605,9 @@ export const German: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'Weitere Optionen' }));
     await expect(canvas.getByRole('button', { name: 'Teilen' })).toBeVisible();
+    await expect(
+      canvas.getByRole('button', { name: 'Stromlaufschema' }),
+    ).toHaveAccessibleDescription('Anna bearbeitet es gerade');
   },
 };
 
@@ -287,7 +631,7 @@ export const Dark: Story = {
   name: 'A11y / Dark mode',
   ...darkA11y,
   render: () => (
-    <div style={{ minHeight: 300 }}>
+    <div style={{ minHeight: 440 }}>
       <Menu label="Project tools" align="start" defaultOpen>
         <MenuLabel>Project</MenuLabel>
         <MenuItem icon={<Share2 size={15} strokeWidth={1.8} />} current>
@@ -295,6 +639,12 @@ export const Dark: Story = {
         </MenuItem>
         <MenuItem detail="PDF">Print</MenuItem>
         <MenuItem disabled>Archive</MenuItem>
+        <MenuItem disabled description="Anna is editing it">
+          Circuit diagram
+        </MenuItem>
+        <MenuItem description="Shows the compiler steps" pressed>
+          Compiler debug
+        </MenuItem>
         <MenuSeparator />
         <MenuItem icon={<Trash2 size={15} strokeWidth={1.8} />}>Delete</MenuItem>
       </Menu>

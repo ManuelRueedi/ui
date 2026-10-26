@@ -68,16 +68,35 @@
 }
 
 .menu[data-align='end'] .panel {
-  right: 0;
+  inset-inline-end: 0;
 }
 
 .menu[data-align='start'] .panel {
-  left: 0;
+  inset-inline-start: 0;
+}
+
+.menu[data-align='center'] .panel {
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .menu[data-placement='top'] .panel {
   bottom: calc(100% + var(--space-1));
   top: auto;
+}
+
+/*
+ * In the top layer the panel is fixed at the coordinates and height from place(), which flips and
+ * shifts it to stay on screen. This also resets the browser's centred popover styles. Without
+ * popover support the absolute rules above apply.
+ */
+.menu .panel:popover-open {
+  box-sizing: border-box;
+  inset: var(--menu-y, 0) auto auto var(--menu-x, 0);
+  margin: 0;
+  max-height: var(--menu-max-height, min(70dvh, 600px));
+  position: fixed;
+  transform: none;
 }
 
 .item {
@@ -116,7 +135,9 @@
   outline: none;
 }
 
-.item[aria-current='true'] {
+/* The shown entry and toggles that are on share one look: grayscale, no colour. */
+.item[aria-current]:not([aria-current='false']),
+.item[aria-pressed='true'] {
   background: var(--bg-2);
   color: var(--fg-1);
   font-weight: var(--fw-semibold);
@@ -141,6 +162,22 @@
 .item-label {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.item-text {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+  padding-block: var(--space-1);
+}
+
+/* Stays readable on a disabled item, where it often says why. */
+.item-description {
+  color: var(--fg-3);
+  font-size: 12px;
+  font-weight: var(--fw-regular);
+  line-height: 1.35;
 }
 
 .item-detail {
