@@ -9,6 +9,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react';
+import { useUiMessages } from '../../i18n/UiProvider';
 import { cx } from '../../internal/cx';
 import styles from './PageLoading.module.css';
 
@@ -20,6 +21,7 @@ const CoveredContext = createContext(false);
 
 export type PageLoadingProps = {
   loading?: boolean;
+  /** Status text after a long wait. Defaults to the translated "Loading page". */
   label?: string;
   /** Keep available content usable while its data refreshes. */
   retainContent?: boolean;
@@ -46,13 +48,15 @@ function durationMs(style: CSSStyleDeclaration, token: string, fallback: number)
  */
 export function PageLoading({
   loading = false,
-  label = 'Loading page',
+  label: labelProp,
   retainContent = false,
   statusPlacement = 'overlay',
   placeholder,
   children,
   className,
 }: PageLoadingProps) {
+  const messages = useUiMessages();
+  const label = labelProp ?? messages.pageLoading.label;
   const blocking = loading && !retainContent;
   const covered = useContext(CoveredContext);
   const [phase, setPhaseState] = useState<Phase>(() => (blocking ? 'waiting' : 'ready'));

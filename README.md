@@ -67,6 +67,23 @@ messen.app's screens.
 These optional hooks do not alter existing defaults. Apps keep navigation, responsive layout,
 scrolling and transition timing in their own components.
 
+## App composition hooks (0.2.1)
+
+- Dialog size="xl" is about 1160 px wide and may use the full viewport height; the size can
+  change while the dialog is open. onClose(reason) says what asked to close it: 'button',
+  'escape' or 'backdrop'. The parent owns open, so it can ignore a reason, for example
+  'backdrop' while a form holds typed input. A caller's aria-describedby is added to the
+  description instead of replaced. A dialog that unmounts while open closes first, so the
+  browser returns focus to the opener.
+- Collapsible.headingLevel also takes 5, 6 and 'none' (the toggle sits in a plain block, for
+  folds in alerts or repeated rows). Collapsible.className goes on the root element.
+- SegmentOption.title is the option's hover hint. SegmentControl.describedBy sets the group's
+  aria-describedby.
+- Tooltip opens on focus only when the focus is visible (keyboard), so a script that restores
+  focus after a mouse action no longer opens it. describe={false} leaves out aria-describedby
+  when the tooltip only repeats the trigger's name.
+- PageLoading's default label comes from the catalogs (pageLoading.label).
+
 ## Develop
 
 Use the Node version in `.node-version`.

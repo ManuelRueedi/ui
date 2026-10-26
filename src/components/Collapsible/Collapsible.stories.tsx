@@ -1,6 +1,6 @@
 import compatibility from '../../stories/compatibility.module.css';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { darkA11y, staticStory } from '../../stories/storyHelpers';
 import { Checkbox } from '../Checkbox/Checkbox';
 import { Input } from '../Input/Input';
@@ -10,7 +10,10 @@ const meta = {
   title: 'Components/Collapsible',
   component: Collapsible,
   args: { title: 'Besichtigung', size: 'md', disabled: false },
-  argTypes: { size: { control: 'radio', options: ['sm', 'md'] } },
+  argTypes: {
+    size: { control: 'radio', options: ['sm', 'md'] },
+    headingLevel: { control: 'radio', options: [2, 3, 4, 5, 6, 'none'] },
+  },
   render: (args) => (
     <div style={{ width: 420 }}>
       <Collapsible {...args}>
@@ -145,4 +148,74 @@ export const HeadingAndPanelHooks: Story = {
       await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     }
   },
+};
+
+const issues = ['Cable W3 has no length', 'Circuit F2 has no protective device'];
+
+function IssueList() {
+  return (
+    <div role="alert" className="story-stack" style={{ width: 420 }}>
+      <p>2 issues need attention.</p>
+      {issues.map((issue) => (
+        <div key={issue} className="story-section">
+          <span>{issue}</span>
+          <Collapsible title="Technical details" size="sm" headingLevel="none">
+            <code>{issue.toLowerCase().replaceAll(' ', '-')}</code>
+          </Collapsible>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export const WithoutHeading: Story = {
+  name: 'Without heading',
+  parameters: staticStory,
+  render: () => <IssueList />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // One fold per issue must not add a heading per issue.
+    await expect(canvas.queryByRole('heading')).toBeNull();
+    const [first, second] = canvas.getAllByRole('button', { name: 'Technical details' });
+    await userEvent.click(first);
+    await expect(first).toHaveAttribute('aria-expanded', 'true');
+    await expect(second).toHaveAttribute('aria-expanded', 'false');
+    await waitFor(() => expect(canvas.getByText('cable-w3-has-no-length')).toBeVisible());
+  },
+};
+
+function NestedFolds() {
+  return (
+    <div style={{ width: 420 }}>
+      <Collapsible title="Cable W3" headingLevel={4} defaultOpen className={compatibility.fold}>
+        <Collapsible title="Cores" summary="5 cores" headingLevel={5} size="sm">
+          <p>L1, L2, L3, N, PE</p>
+        </Collapsible>
+      </Collapsible>
+    </div>
+  );
+}
+
+export const NestedLevels: Story = {
+  name: 'Nested heading levels and root class',
+  tags: ['!dev', '!autodocs'],
+  parameters: staticStory,
+  render: () => <NestedFolds />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const outer = canvas.getByRole('heading', { level: 4, name: 'Cable W3' });
+    const inner = canvas.getByRole('heading', { level: 5 });
+    await expect(within(inner).getByRole('button', { name: 'Cores' })).toBeVisible();
+    const root = outer.parentElement!;
+    await expect(root).toHaveClass(compatibility.fold);
+    await expect(getComputedStyle(root).borderTopWidth).toBe('1px');
+    await userEvent.click(canvas.getByRole('button', { name: 'Cores' }));
+    await waitFor(() => expect(canvas.getByText('L1, L2, L3, N, PE')).toBeVisible());
+  },
+};
+
+export const WithoutHeadingDark: Story = {
+  name: 'A11y / Without heading dark',
+  ...darkA11y,
+  render: () => <IssueList />,
 };

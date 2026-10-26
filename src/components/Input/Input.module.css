@@ -45,6 +45,15 @@
   box-shadow: 0 0 0 1px var(--border-focus);
 }
 
+.control[data-size='sm'] {
+  height: var(--control-height-sm);
+}
+
+.control[data-size='sm'] .input {
+  font-size: var(--control-font-size-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
 .control[data-size='lg'] {
   height: var(--control-height-lg);
 }
@@ -102,6 +111,18 @@
 
 .suffix {
   padding-right: 10px;
+}
+
+.control[data-size='sm'] .affix {
+  font-size: var(--control-font-size-sm);
+}
+
+.control[data-size='sm'] .prefix {
+  padding-left: var(--space-2);
+}
+
+.control[data-size='sm'] .suffix {
+  padding-right: var(--space-2);
 }
 
 .control[data-size='lg'] .affix {

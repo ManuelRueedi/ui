@@ -354,3 +354,48 @@ export const PhonePrefixDark: Story = {
     await expect(getComputedStyle(tab).paddingInlineStart).toBe('16px');
   },
 };
+
+const lifecycleOptions = [
+  { value: 'planning', label: 'Planning', title: 'Shows the installation as planned' },
+  { value: 'built', label: 'As built', title: 'Shows what was installed on site' },
+];
+
+function LifecycleExample() {
+  const [value, setValue] = useState('planning');
+  const current = lifecycleOptions.find((option) => option.value === value);
+  return (
+    <div className="story-stack" style={{ width: 360 }}>
+      <SegmentControl
+        label="Lifecycle"
+        describedBy="lifecycle-description"
+        options={lifecycleOptions}
+        value={value}
+        onValueChange={setValue}
+      />
+      <p id="lifecycle-description" className="story-note">
+        {current?.title}
+      </p>
+    </div>
+  );
+}
+
+export const TitlesAndDescription: Story = {
+  name: 'Titles and description',
+  parameters: staticStory,
+  render: () => <LifecycleExample />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const group = canvas.getByRole('radiogroup', { name: 'Lifecycle' });
+    const built = canvas.getByRole('radio', { name: 'As built' });
+    await expect(built).toHaveAttribute('title', 'Shows what was installed on site');
+    await expect(group).toHaveAccessibleDescription('Shows the installation as planned');
+    await userEvent.click(built);
+    await expect(group).toHaveAccessibleDescription('Shows what was installed on site');
+  },
+};
+
+export const TitlesDark: Story = {
+  name: 'A11y / Titles dark',
+  ...darkA11y,
+  render: () => <LifecycleExample />,
+};

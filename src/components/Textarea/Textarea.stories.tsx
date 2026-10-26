@@ -8,7 +8,7 @@ const meta = {
   component: Textarea,
   args: { label: 'Notes', placeholder: 'What did you find?', rows: 3, size: 'md' },
   argTypes: {
-    size: { control: 'radio', options: ['md', 'lg'] },
+    size: { control: 'radio', options: ['sm', 'md', 'lg'] },
     variant: { control: 'radio', options: ['default', 'plain'] },
   },
   render: (args) => (
@@ -32,6 +32,7 @@ export const Default: Story = {
 function States() {
   return (
     <div className="story-form">
+      <Textarea label="Small" size="sm" rows={2} defaultValue="Compact note" />
       <Textarea label="With error" error="Add a note." />
       <Textarea label="Read only" readOnly defaultValue="Checked on site." />
       <Textarea label="Disabled" disabled defaultValue="Locked" />

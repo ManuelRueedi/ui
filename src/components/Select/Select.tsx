@@ -6,6 +6,12 @@ import styles from './Select.module.css';
 
 export type SelectOption = { value: string; label: string; disabled?: boolean };
 
+/** A labelled group of options, drawn as an optgroup. */
+export type SelectOptionGroup = { label: string; options: SelectOption[]; disabled?: boolean };
+
+const isGroup = (item: SelectOption | SelectOptionGroup): item is SelectOptionGroup =>
+  'options' in item;
+
 export type SelectProps = Omit<
   SelectHTMLAttributes<HTMLSelectElement>,
   'size' | 'children' | 'value' | 'defaultValue' | 'multiple'
@@ -14,10 +20,10 @@ export type SelectProps = Omit<
   hideLabel?: boolean;
   value?: string;
   defaultValue?: string;
-  options?: SelectOption[];
+  options?: (SelectOption | SelectOptionGroup)[];
   /** An empty first choice, e.g. "Choose…". */
   placeholder?: string;
-  size?: 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg';
   variant?: 'default' | 'plain';
   description?: string;
   error?: string;
@@ -52,7 +58,9 @@ export function Select({
     keyboard: false,
   });
   const shownValue = value ?? defaultValue ?? '';
-  const selectedLabel = options.find((option) => option.value === shownValue)?.label ?? shownValue;
+  const flatOptions = options.flatMap((item) => (isGroup(item) ? item.options : [item]));
+  const selectedLabel =
+    flatOptions.find((option) => option.value === shownValue)?.label ?? shownValue;
 
   return (
     <Field
@@ -115,20 +123,37 @@ export function Select({
                   {placeholder}
                 </option>
               )}
-              {options.map((option) => (
-                <option
-                  key={option.value}
-                  className={styles.option}
-                  value={option.value}
-                  disabled={option.disabled}
-                >
-                  {option.label}
-                </option>
-              ))}
+              {options.map((item) =>
+                isGroup(item) ? (
+                  <optgroup
+                    key={`group:${item.label}`}
+                    className={styles.option}
+                    label={item.label}
+                    disabled={item.disabled}
+                  >
+                    {item.options.map(renderOption)}
+                  </optgroup>
+                ) : (
+                  renderOption(item)
+                ),
+              )}
             </select>
           )}
         </div>
       )}
     </Field>
+  );
+}
+
+function renderOption(option: SelectOption) {
+  return (
+    <option
+      key={option.value}
+      className={styles.option}
+      value={option.value}
+      disabled={option.disabled}
+    >
+      {option.label}
+    </option>
   );
 }

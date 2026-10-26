@@ -47,6 +47,15 @@
   color: var(--fg-4);
 }
 
+.control[data-size='sm'] {
+  height: var(--control-height-sm);
+}
+.control[data-size='sm'] .select,
+.control[data-size='sm'] .input {
+  font-size: var(--control-font-size-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
 .control[data-size='lg'] {
   height: var(--control-height-lg);
 }

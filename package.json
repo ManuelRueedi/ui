@@ -1,6 +1,6 @@
 {
   "name": "@manuelrueedi/ui",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Shared React components and design tokens for CircuitDocs and messen.app",
   "type": "module",

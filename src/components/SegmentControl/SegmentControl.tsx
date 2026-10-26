@@ -23,6 +23,8 @@ export type SegmentOption = {
   disabled?: boolean;
   /** Decorative content before the label, hidden from assistive technology. */
   prefix?: ReactNode;
+  /** A longer description, shown as the option's native hover hint. */
+  title?: string;
 };
 
 export type SegmentControlProps = {
@@ -34,6 +36,8 @@ export type SegmentControlProps = {
   onActivate?: (value: string) => void;
   /** Names the group for screen readers. */
   label?: string;
+  /** Id of an element that describes the group, e.g. the meaning of the current choice. */
+  describedBy?: string;
   size?: 'sm' | 'md';
   /** `segmented-tabs` keeps the segmented look while switching between tab panels. */
   variant?: 'segmented' | 'tabs' | 'segmented-tabs';
@@ -50,6 +54,7 @@ export function SegmentControl({
   onValueChange,
   onActivate,
   label,
+  describedBy,
   size = 'md',
   variant = 'segmented',
   centerSelected = false,
@@ -211,6 +216,7 @@ export function SegmentControl({
       )}
       role={isTabs ? 'tablist' : 'radiogroup'}
       aria-label={label ?? messages.selectOption}
+      aria-describedby={describedBy}
       aria-disabled={disabled}
       tabIndex={disabled || firstEnabledIndex < 0 ? 0 : -1}
       onKeyDown={handleKeyDown}
@@ -228,6 +234,7 @@ export function SegmentControl({
             disabled={optionDisabled}
             role={isTabs ? 'tab' : 'radio'}
             data-value={option.value}
+            title={option.title}
             aria-checked={isTabs ? undefined : active}
             aria-selected={isTabs ? active : undefined}
             tabIndex={
