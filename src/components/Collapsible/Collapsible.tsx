@@ -23,7 +23,8 @@ export type CollapsibleProps = {
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   size?: 'sm' | 'md';
-  headingLevel?: 2 | 3 | 4;
+  /** `none` puts the toggle in a plain block, for folds in alerts or repeated list rows. */
+  headingLevel?: 2 | 3 | 4 | 5 | 6 | 'none';
   disabled?: boolean;
   /** Lets the open panel fill the remaining height and scroll. */
   fill?: boolean;
@@ -32,6 +33,8 @@ export type CollapsibleProps = {
   headingClassName?: string;
   /** Class on the animated panel, for layout such as spanning beneath the leading content. */
   panelClassName?: string;
+  /** Class on the root element, for the app's own spacing or borders. */
+  className?: string;
   children?: ReactNode;
 };
 
@@ -48,6 +51,7 @@ export function Collapsible({
   leading,
   headingClassName,
   panelClassName,
+  className,
   children,
 }: CollapsibleProps) {
   const id = useId();
@@ -58,7 +62,7 @@ export function Collapsible({
   const [animating, setAnimating] = useState(false);
   const spotlight = useSpotlight<HTMLSpanElement>({ disabled });
   const triggerRef = useMergedRefs(trigger, spotlight);
-  const Heading = `h${headingLevel}` as const;
+  const Heading = headingLevel === 'none' ? 'div' : (`h${headingLevel}` as const);
 
   function toggle() {
     if (!disabled) setOpen(!open);
@@ -94,6 +98,7 @@ export function Collapsible({
         Boolean(leading) && styles['with-leading'],
         size === 'sm' && styles.small,
         fill && styles.fill,
+        className,
       )}
     >
       {leading && <div className={styles.leading}>{leading}</div>}

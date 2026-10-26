@@ -57,6 +57,7 @@ export const en = {
     satellite: 'Satellite',
   },
   menu: { more: 'More options' },
+  pageLoading: { label: 'Loading page' },
   offline: 'Offline',
 };
 
@@ -119,6 +120,7 @@ export const deCH: UiMessages = {
     satellite: 'Satellit',
   },
   menu: { more: 'Weitere Optionen' },
+  pageLoading: { label: 'Seite wird geladen' },
   offline: 'Offline',
 };
 
@@ -179,6 +181,7 @@ export const frCH: UiMessages = {
     satellite: 'Satellite',
   },
   menu: { more: 'Plus d’options' },
+  pageLoading: { label: 'Chargement de la page' },
   offline: 'Hors ligne',
 };
 
@@ -239,6 +242,7 @@ export const itCH: UiMessages = {
     satellite: 'Satellite',
   },
   menu: { more: 'Altre opzioni' },
+  pageLoading: { label: 'Caricamento della pagina' },
   offline: 'Offline',
 };
 

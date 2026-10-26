@@ -12,7 +12,7 @@ const meta = {
   title: 'Components/PageLoading',
   component: PageLoading,
   parameters: { canvasLayout: 'fullscreen' },
-  args: { loading: true, label: 'Loading page', children: null },
+  args: { loading: true, children: null },
   argTypes: { children: { table: { disable: true } } },
   render: (args) => (
     <PageLoading {...args}>
@@ -107,6 +107,32 @@ export const LongWait: Story = {
   play: async ({ canvasElement }) => {
     await waitFor(
       () => expect(within(canvasElement).getByRole('status')).toHaveTextContent('Loading page'),
+      { timeout: 3000 },
+    );
+  },
+};
+
+export const GermanLongWait: Story = {
+  name: 'German long wait message',
+  tags: ['!dev', '!autodocs'],
+  parameters: { language: 'de-CH' },
+  play: async ({ canvasElement }) => {
+    await waitFor(
+      () =>
+        expect(within(canvasElement).getByRole('status')).toHaveTextContent('Seite wird geladen'),
+      { timeout: 3000 },
+    );
+  },
+};
+
+export const CustomLabel: Story = {
+  name: 'Custom long wait message',
+  tags: ['!dev', '!autodocs'],
+  args: { label: 'Opening project' },
+  parameters: { language: 'de-CH' },
+  play: async ({ canvasElement }) => {
+    await waitFor(
+      () => expect(within(canvasElement).getByRole('status')).toHaveTextContent('Opening project'),
       { timeout: 3000 },
     );
   },

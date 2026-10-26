@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Info } from 'lucide-react';
+import { Info, Undo2 } from 'lucide-react';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { darkA11y, staticStory } from '../../stories/storyHelpers';
 import { Button } from '../Button/Button';
@@ -9,7 +9,13 @@ import { Tooltip } from './Tooltip';
 const meta = {
   title: 'Components/Tooltip',
   component: Tooltip,
-  args: { content: 'Saves the protocol', placement: 'top', collision: 'flip', disabled: false },
+  args: {
+    content: 'Saves the protocol',
+    placement: 'top',
+    collision: 'flip',
+    disabled: false,
+    describe: true,
+  },
   argTypes: {
     placement: { control: 'radio', options: ['top', 'right', 'bottom', 'left'] },
     collision: { control: 'radio', options: ['flip', 'shift', 'none'] },
@@ -73,5 +79,43 @@ export const DarkMode: Story = {
   play: async ({ canvasElement }) => {
     within(canvasElement).getByRole('button', { name: 'Info top' }).focus();
     await within(document.body).findByText('Placed top');
+  },
+};
+
+function IconLabel() {
+  return (
+    <div style={{ padding: 48 }}>
+      <Tooltip content="Undo" describe={false}>
+        <IconButton label="Undo" variant="secondary">
+          <Undo2 size={16} strokeWidth={1.8} />
+        </IconButton>
+      </Tooltip>
+    </div>
+  );
+}
+
+export const LabelOnly: Story = {
+  name: 'Repeats the label',
+  parameters: staticStory,
+  render: () => <IconLabel />,
+  play: async ({ canvasElement }) => {
+    const button = within(canvasElement).getByRole('button', { name: 'Undo' });
+    // The tooltip only shows the name, so screen readers do not hear it twice.
+    await expect(button).not.toHaveAttribute('aria-describedby');
+    await userEvent.tab();
+    await expect(button).toHaveFocus();
+    const tooltip = await within(document.body).findByRole('tooltip');
+    await waitFor(() => expect(tooltip).toHaveAttribute('data-open', 'true'));
+    await expect(tooltip).toHaveTextContent('Undo');
+  },
+};
+
+export const LabelOnlyDark: Story = {
+  name: 'A11y / Repeats the label dark',
+  ...darkA11y,
+  render: () => <IconLabel />,
+  play: async ({ canvasElement }) => {
+    await userEvent.hover(within(canvasElement).getByRole('button', { name: 'Undo' }));
+    await within(document.body).findByRole('tooltip');
   },
 };

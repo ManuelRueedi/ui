@@ -31,6 +31,11 @@ export type TooltipProps = Omit<HTMLAttributes<HTMLSpanElement>, 'content'> & {
   disabled?: boolean;
   /** Also opens on a tap; a tap elsewhere closes it. */
   openOnTouch?: boolean;
+  /**
+   * Links the tooltip to the focusable child as its description. Turn it off when the tooltip
+   * only repeats the child's accessible name, as on an icon button.
+   */
+  describe?: boolean;
   children?: ReactNode;
 };
 
@@ -101,6 +106,17 @@ function coordinates(placement: TooltipPlacement, triggerRect: DOMRect, tooltipR
   };
 }
 
+// Keyboard focus opens the tooltip; a script restoring focus after a mouse action does not.
+function focusVisible(element: EventTarget) {
+  if (!(element instanceof Element)) return true;
+  try {
+    return element.matches(':focus-visible');
+  } catch {
+    // Browsers without :focus-visible keep the old behavior.
+    return true;
+  }
+}
+
 function createsFixedContainingBlock(style: CSSStyleDeclaration) {
   const willChange = style.willChange ?? '';
   const contain = style.contain ?? '';
@@ -120,8 +136,9 @@ function createsFixedContainingBlock(style: CSSStyleDeclaration) {
 }
 
 /**
- * Shows a short hint on hover and focus. The tooltip sits in the browser's top layer, so cards
- * and dialogs do not clip it. The position is set straight on the element, without re-rendering.
+ * Shows a short hint on hover and keyboard focus. The tooltip sits in the browser's top layer, so
+ * cards and dialogs do not clip it. The position is set straight on the element, without
+ * re-rendering.
  */
 export function Tooltip({
   id,
@@ -133,6 +150,7 @@ export function Tooltip({
   maxWidth = '240px',
   disabled = false,
   openOnTouch = false,
+  describe = true,
   className,
   children,
   onPointerEnter,
@@ -333,7 +351,7 @@ export function Tooltip({
   // The focusable element inside the anchor gets the tooltip as its description.
   useEffect(() => {
     const anchor = trigger.current;
-    if (!anchor || !hasTooltip) return;
+    if (!anchor || !hasTooltip || !describe) return;
     const target = anchor.matches(focusableSelector)
       ? anchor
       : anchor.querySelector<HTMLElement>(focusableSelector);
@@ -346,7 +364,7 @@ export function Tooltip({
       if (previous) target.setAttribute('aria-describedby', previous);
       else target.removeAttribute('aria-describedby');
     };
-  }, [hasTooltip, tooltipId, children]);
+  }, [hasTooltip, describe, tooltipId, children]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -396,7 +414,7 @@ export function Tooltip({
           onPointerLeave?.(event);
         }}
         onFocus={(event) => {
-          show();
+          if (focusVisible(event.target)) show();
           onFocus?.(event);
         }}
         onBlur={(event) => {

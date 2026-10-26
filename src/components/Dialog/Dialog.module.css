@@ -1,9 +1,10 @@
 .dialog {
+  --dialog-max-height: min(760px, calc(100vh - var(--space-8)));
   background: transparent;
   border: 0;
   color: var(--fg-1);
   margin: auto;
-  max-height: min(760px, calc(100vh - var(--space-8)));
+  max-height: var(--dialog-max-height);
   max-width: calc(100vw - var(--space-8));
   opacity: 0;
   overflow: visible;
@@ -37,6 +38,12 @@
 
 .dialog.lg {
   --dialog-width: 720px;
+}
+
+/* A wide work surface, such as a document preview or a library, may use the full height. */
+.dialog.xl {
+  --dialog-width: 1160px;
+  --dialog-max-height: calc(100dvh - var(--space-8));
 }
 
 .dialog::backdrop {
@@ -78,7 +85,7 @@
   box-shadow: var(--shadow-popover);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  max-height: min(760px, calc(100vh - var(--space-8)));
+  max-height: var(--dialog-max-height);
   overflow: hidden;
 }
 
@@ -128,14 +135,11 @@
 }
 
 @media (max-width: 560px) {
-  .dialog {
-    max-height: calc(100vh - var(--space-4));
+  .dialog,
+  .dialog.xl {
+    --dialog-max-height: calc(100vh - var(--space-4));
     max-width: calc(100vw - var(--space-4));
     width: calc(100vw - var(--space-4));
-  }
-
-  .surface {
-    max-height: calc(100vh - var(--space-4));
   }
 }
 
