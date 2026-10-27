@@ -154,6 +154,35 @@
   animation: button-pop 180ms var(--ease-out) both;
 }
 
+/* A long label breaks onto more lines and starts at the leading edge; the status stays centred. */
+.wrap {
+  justify-content: flex-start;
+  /* Loose enough for several lines, tight enough that one line keeps the control height. */
+  line-height: 1.2;
+  text-align: start;
+  white-space: normal;
+}
+
+.wrap .content-shell {
+  justify-items: start;
+  min-width: 0;
+  width: 100%;
+}
+
+.wrap .idle-content {
+  justify-content: flex-start;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wrap .idle-content > :global(svg) {
+  flex: none;
+}
+
+.wrap .status-content {
+  justify-self: center;
+}
+
 .sm {
   font-size: 12px;
   min-width: 0;

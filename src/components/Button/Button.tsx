@@ -18,6 +18,8 @@ type CommonProps = {
   loadingLabel?: string;
   successLabel?: string;
   errorLabel?: string;
+  /** Lets a long label break onto several lines, aligned to the start, e.g. in a narrow panel. */
+  wrap?: boolean;
   children?: ReactNode;
 };
 
@@ -46,6 +48,7 @@ export function Button(props: ButtonProps) {
     loadingLabel = messages.button.working,
     successLabel = messages.button.done,
     errorLabel = messages.button.failed,
+    wrap = false,
     className,
     children,
   } = props;
@@ -58,7 +61,7 @@ export function Button(props: ButtonProps) {
         : asyncState === 'error'
           ? errorLabel
           : '';
-  const classes = cx(styles.button, styles[variant], styles[size], className);
+  const classes = cx(styles.button, styles[variant], styles[size], wrap && styles.wrap, className);
 
   const content = (
     <span className={styles['content-shell']}>
@@ -101,6 +104,7 @@ export function Button(props: ButtonProps) {
     loadingLabel: _loadingLabel,
     successLabel: _successLabel,
     errorLabel: _errorLabel,
+    wrap: _wrap,
     className: _className,
     children: _children,
     href: _href,
@@ -156,6 +160,7 @@ function LinkButton(props: LinkElementProps & { inner: ReactNode }) {
     loadingLabel: _loadingLabel,
     successLabel: _successLabel,
     errorLabel: _errorLabel,
+    wrap: _wrap,
     children: _children,
     disabled: _disabled,
     inner,

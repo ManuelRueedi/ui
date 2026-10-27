@@ -98,6 +98,32 @@ describe('Dialog', () => {
     expect(dialog).not.toHaveAttribute('open');
   });
 
+  it('leaves an Escape that content inside used, e.g. an open Menu', () => {
+    const onClose = vi.fn();
+    render(
+      <Dialog open title="Rename project" onClose={onClose}>
+        <input aria-label="Name" onKeyDown={(event) => event.preventDefault()} />
+      </Dialog>,
+    );
+    fireEvent.keyDown(screen.getByLabelText('Name'), { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('leaves Escape to a search field with text, which clears itself', () => {
+    const onClose = vi.fn();
+    render(
+      <Dialog open title="Add symbol" onClose={onClose}>
+        <input aria-label="Search" type="search" defaultValue="Socket" />
+      </Dialog>,
+    );
+    const search = screen.getByLabelText('Search');
+    expect(fireEvent.keyDown(search, { key: 'Escape' })).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.change(search, { target: { value: '' } });
+    expect(fireEvent.keyDown(search, { key: 'Escape' })).toBe(false);
+    expect(onClose).toHaveBeenCalledWith('escape');
+  });
+
   it('reopens when the browser closes it while the parent keeps it open', () => {
     render(<Parent keepOpenFor={['escape', 'button']} />);
     const dialog = getDialog();

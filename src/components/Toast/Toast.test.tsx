@@ -1,0 +1,780 @@
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { StrictMode, useState, type ReactNode } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { UiProvider } from '../../i18n/UiProvider';
+import {
+  Toast,
+  Toaster,
+  useOptionalToast,
+  useToast,
+  type ToastApi,
+  type ToastOptions,
+  type ToastProps,
+  type ToasterProps,
+} from './Toast';
+
+const captured: { api?: ToastApi } = {};
+
+function Capture() {
+  captured.api = useToast();
+  return null;
+}
+
+function renderToaster(props: Omit<ToasterProps, 'children'> = {}, children?: ReactNode) {
+  const view = render(
+    <Toaster {...props}>
+      <Capture />
+      {children}
+    </Toaster>,
+  );
+  return { ...view, region: screen.getByRole('region', { name: 'Notifications' }) };
+}
+
+function api(): ToastApi {
+  if (!captured.api) throw new Error('No Toaster rendered');
+  return captured.api;
+}
+
+function show(options: ToastOptions) {
+  let id = '';
+  act(() => {
+    id = api().show(options);
+  });
+  return id;
+}
+
+function advance(ms: number) {
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+}
+
+function toastOf(text: string) {
+  const toast = screen.getByText(text).closest<HTMLElement>('[data-tone]');
+  if (!toast) throw new Error(`No toast for ${text}`);
+  return toast;
+}
+
+const toastCount = (region: HTMLElement) => region.querySelectorAll('[data-tone]').length;
+
+/** The region's two live containers: polite for most tones, assertive for errors. */
+function liveContainers(region: HTMLElement) {
+  const polite = region.querySelector<HTMLElement>(':scope > [aria-live="polite"]');
+  const assertive = region.querySelector<HTMLElement>(':scope > [aria-live="assertive"]');
+  if (!polite || !assertive) throw new Error('No live containers');
+  return { polite, assertive };
+}
+
+/** The live regions a toast is announced through: itself and its ancestors with aria-live. */
+function liveRegionsOf(toast: HTMLElement) {
+  const regions: string[] = [];
+  for (let node: HTMLElement | null = toast; node; node = node.parentElement) {
+    const live = node.getAttribute('aria-live');
+    if (live) regions.push(live);
+  }
+  return regions;
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  captured.api = undefined;
+});
+
+describe('Toaster', () => {
+  it('puts errors in the assertive live region and the other tones in the polite one', () => {
+    const { region } = renderToaster({ max: 4 });
+    const { polite: status, assertive: alert } = liveContainers(region);
+    // Both live regions exist before the first toast, so it is announced.
+    expect(status).toBeEmptyDOMElement();
+    expect(alert).toBeEmptyDOMElement();
+    expect(status).toHaveAttribute('aria-atomic', 'false');
+    expect(alert).toHaveAttribute('aria-atomic', 'false');
+    // The empty containers carry no status or alert role: an app's own getByRole('status') or
+    // getByRole('alert') on the page does not find them.
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    for (const tone of ['neutral', 'success', 'warning', 'error'] as const) {
+      show({ message: `${tone} message`, tone });
+    }
+    expect(within(status).getByText('neutral message')).toBeInTheDocument();
+    expect(within(status).getByText('success message')).toBeInTheDocument();
+    expect(within(status).getByText('warning message')).toBeInTheDocument();
+    expect(within(status).queryByText('error message')).toBeNull();
+    expect(within(alert).getByText('error message')).toBeInTheDocument();
+    expect(toastOf('error message')).toHaveAttribute('aria-atomic', 'true');
+    expect(toastOf('warning message')).toHaveAttribute('aria-atomic', 'true');
+    // Each toast is announced once, through the one live region around it.
+    expect(liveRegionsOf(toastOf('neutral message'))).toEqual(['polite']);
+    expect(liveRegionsOf(toastOf('warning message'))).toEqual(['polite']);
+    expect(liveRegionsOf(toastOf('error message'))).toEqual(['assertive']);
+  });
+
+  it('never takes focus and names the region and the close button from the catalog', () => {
+    render(
+      <UiProvider locale="de-CH">
+        <Toaster>
+          <Capture />
+          <button type="button">Speichern</button>
+        </Toaster>
+      </UiProvider>,
+    );
+    const button = screen.getByRole('button', { name: 'Speichern' });
+    act(() => button.focus());
+    show({ message: 'Gespeichert', attributes: { 'data-save-status': 'ok' } });
+    expect(button).toHaveFocus();
+    const region = screen.getByRole('region', { name: 'Mitteilungen' });
+    expect(within(region).getByRole('button', { name: 'Mitteilung schliessen' })).toBeVisible();
+    expect(toastOf('Gespeichert')).toHaveAttribute('data-save-status', 'ok');
+  });
+
+  it('removes toasts after the duration of their tone; errors stay', () => {
+    vi.useFakeTimers();
+    const onDismiss = vi.fn();
+    const { region } = renderToaster({ max: 5 });
+    show({ message: 'Saved', tone: 'success', onDismiss });
+    show({ message: 'Check the input', tone: 'warning' });
+    show({ message: 'Upload failed', tone: 'error' });
+    show({ message: 'Preparing print', duration: null });
+    show({ message: 'Copied', duration: 1000 });
+
+    advance(1000);
+    expect(screen.queryByText('Copied')).toBeNull();
+    advance(3999);
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+    advance(1);
+    expect(screen.queryByText('Saved')).toBeNull();
+    expect(onDismiss).toHaveBeenCalledExactlyOnceWith('timeout');
+    advance(2999);
+    expect(screen.getByText('Check the input')).toBeInTheDocument();
+    advance(1);
+    expect(screen.queryByText('Check the input')).toBeNull();
+    advance(60_000);
+    expect(screen.getByText('Upload failed')).toBeInTheDocument();
+    expect(screen.getByText('Preparing print')).toBeInTheDocument();
+    expect(toastCount(region)).toBe(2);
+  });
+
+  it('pauses the timers while the pointer is over a toast', () => {
+    vi.useFakeTimers();
+    const { region } = renderToaster();
+    show({ message: 'Saved', duration: 1000 });
+    advance(400);
+    fireEvent.pointerOver(toastOf('Saved'));
+    expect(region).toHaveAttribute('data-paused');
+    advance(5000);
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+
+    fireEvent.pointerOut(toastOf('Saved'), { relatedTarget: document.body });
+    expect(region).not.toHaveAttribute('data-paused');
+    // The timer goes on with the 600 ms it had left.
+    advance(599);
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+    advance(1);
+    expect(screen.queryByText('Saved')).toBeNull();
+  });
+
+  it('pauses the timers while focus is inside and while the page is hidden', () => {
+    vi.useFakeTimers();
+    const { region } = renderToaster({}, <button type="button">Outside</button>);
+    show({ message: 'Saved', duration: 1000 });
+    act(() => within(toastOf('Saved')).getByRole('button', { name: 'Dismiss' }).focus());
+    expect(region).toHaveAttribute('data-paused');
+    advance(5000);
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+    act(() => screen.getByRole('button', { name: 'Outside' }).focus());
+    expect(region).not.toHaveAttribute('data-paused');
+
+    let hidden = true;
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+    try {
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(region).toHaveAttribute('data-paused');
+      advance(5000);
+      expect(screen.getByText('Saved')).toBeInTheDocument();
+      hidden = false;
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      advance(1000);
+      expect(screen.queryByText('Saved')).toBeNull();
+    } finally {
+      delete (document as { hidden?: boolean }).hidden;
+    }
+  });
+
+  it('replaces a toast with the same id in place and starts its timer again', () => {
+    vi.useFakeTimers();
+    const first = vi.fn();
+    const { region } = renderToaster();
+    show({ message: 'Copied', duration: null });
+    show({ id: 'save', message: 'Saving', duration: null, onDismiss: first });
+    const element = toastOf('Saving');
+    advance(10_000);
+
+    expect(show({ id: 'save', message: 'Saved', tone: 'success' })).toBe('save');
+    expect(first).toHaveBeenCalledExactlyOnceWith('replaced');
+    expect(toastOf('Saved')).toBe(element);
+    expect(screen.queryByText('Saving')).toBeNull();
+    expect(toastCount(region)).toBe(2);
+    // It keeps its place in the stack.
+    expect(element.style.getPropertyValue('--toast-row')).toBe('2');
+    advance(4999);
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+    advance(1);
+    expect(screen.queryByText('Saved')).toBeNull();
+  });
+
+  it('changes a toast with update and removes it with dismiss', () => {
+    vi.useFakeTimers();
+    const onDismiss = vi.fn();
+    const onClick = vi.fn();
+    renderToaster();
+    const id = show({
+      message: 'Preparing print',
+      duration: null,
+      onDismiss,
+      action: { label: 'Cancel', onClick },
+    });
+    advance(10_000);
+    act(() => api().update(id, { message: 'Still preparing' }));
+    expect(toastOf('Still preparing')).toHaveAttribute('data-tone', 'neutral');
+    // The other options stay.
+    expect(
+      within(toastOf('Still preparing')).getByRole('button', { name: 'Cancel' }),
+    ).toBeVisible();
+    advance(60_000);
+    expect(screen.getByText('Still preparing')).toBeInTheDocument();
+
+    act(() => api().update(id, { tone: 'warning', duration: 3000 }));
+    expect(toastOf('Still preparing')).toHaveAttribute('data-tone', 'warning');
+    act(() => api().update('unknown', { message: 'Ignored' }));
+    expect(screen.queryByText('Ignored')).toBeNull();
+    act(() => api().dismiss(id));
+    expect(screen.queryByText('Still preparing')).toBeNull();
+    expect(onDismiss).toHaveBeenCalledExactlyOnceWith('code');
+  });
+
+  it('keeps at most max toasts, the newest nearest the edge', () => {
+    const dropped = vi.fn();
+    const { region, rerender } = renderToaster({ max: 2 });
+    show({ message: 'One', onDismiss: dropped });
+    show({ message: 'Two', tone: 'error' });
+    show({ message: 'Three' });
+    expect(screen.queryByText('One')).toBeNull();
+    // Not 'replaced': that is the app's own show with the same id.
+    expect(dropped).toHaveBeenCalledExactlyOnceWith('overflow');
+    expect(toastCount(region)).toBe(2);
+    expect(region.style.getPropertyValue('--toast-rows')).toBe('2');
+    // The rows interleave both live regions by age.
+    expect(toastOf('Two').style.getPropertyValue('--toast-row')).toBe('1');
+    expect(toastOf('Three').style.getPropertyValue('--toast-row')).toBe('2');
+
+    rerender(
+      <Toaster max={2} placement="top">
+        <Capture />
+      </Toaster>,
+    );
+    expect(region).toHaveAttribute('data-placement', 'top');
+    expect(toastOf('Two').style.getPropertyValue('--toast-row')).toBe('2');
+    expect(toastOf('Three').style.getPropertyValue('--toast-row')).toBe('1');
+  });
+
+  it('pushes out toasts that time out before persistent ones', () => {
+    const { region } = renderToaster({ max: 3 });
+    const print = vi.fn();
+    show({
+      id: 'print',
+      message: 'Preparing print',
+      duration: null,
+      dismissible: false,
+      action: { label: 'Cancel', onClick: vi.fn() },
+      onDismiss: print,
+    });
+    show({ message: 'Upload failed', tone: 'error' });
+    show({ message: 'A', onDismiss: vi.fn() });
+    show({ message: 'B' });
+    show({ message: 'C' });
+    expect(toastCount(region)).toBe(3);
+    expect(toastOf('Preparing print')).toBeInTheDocument();
+    expect(toastOf('Upload failed')).toBeInTheDocument();
+    expect(screen.queryByText('A')).toBeNull();
+    expect(screen.queryByText('B')).toBeNull();
+    expect(print).not.toHaveBeenCalled();
+
+    show({ message: 'Offline', tone: 'warning', duration: null });
+    expect(screen.queryByText('C')).toBeNull();
+    expect(print).not.toHaveBeenCalled();
+    // Only persistent toasts left: the oldest of them goes.
+    show({ message: 'Sync paused', duration: null });
+    expect(screen.queryByText('Preparing print')).toBeNull();
+    expect(print).toHaveBeenCalledExactlyOnceWith('overflow');
+    expect(toastCount(region)).toBe(3);
+  });
+
+  it('keeps a toast that holds the focus or the pointer when more arrive', () => {
+    const { region } = renderToaster({ max: 2 }, <button type="button">Delete</button>);
+    const undo = vi.fn();
+    show({ message: 'Circuit deleted', action: { label: 'Undo', onClick: undo } });
+    const button = within(toastOf('Circuit deleted')).getByRole('button', { name: 'Undo' });
+    act(() => button.focus());
+    show({ message: 'A' });
+    show({ message: 'B' });
+    show({ message: 'C' });
+    expect(button).toHaveFocus();
+    expect(toastOf('Circuit deleted')).toBeInTheDocument();
+    expect(toastCount(region)).toBe(2);
+
+    act(() => screen.getByRole('button', { name: 'Delete' }).focus());
+    fireEvent.pointerOver(within(toastOf('C')).getByRole('button', { name: 'Dismiss' }));
+    show({ message: 'D' });
+    // The toast under the pointer stays; the older one without focus goes.
+    expect(toastOf('C')).toBeInTheDocument();
+    expect(screen.queryByText('Circuit deleted')).toBeNull();
+    show({ message: 'E' });
+    expect(toastOf('C')).toBeInTheDocument();
+    expect(screen.queryByText('D')).toBeNull();
+  });
+
+  it('changes the tone in place: same element, focus kept, announced at the new urgency', () => {
+    const { region } = renderToaster({}, <button type="button">Outside</button>);
+    const status = liveContainers(region).polite;
+    show({
+      id: 'save',
+      message: 'Saving',
+      duration: null,
+      action: { label: 'Cancel', onClick: vi.fn() },
+    });
+    const element = toastOf('Saving');
+    const action = within(element).getByRole('button', { name: 'Cancel' });
+    act(() => action.focus());
+    expect(element).not.toHaveAttribute('aria-live');
+
+    show({
+      id: 'save',
+      message: 'Save failed',
+      tone: 'error',
+      action: { label: 'Retry', onClick: vi.fn() },
+    });
+    expect(toastOf('Save failed')).toBe(element);
+    expect(element).toHaveAttribute('data-tone', 'error');
+    expect(action).toHaveAccessibleName('Retry');
+    expect(action).toHaveFocus();
+    // It stays in the status region but carries the alert's urgency itself.
+    expect(status).toContainElement(element);
+    expect(element).toHaveAttribute('aria-live', 'assertive');
+
+    act(() => api().update('save', { message: 'Saved', tone: 'success' }));
+    expect(toastOf('Saved')).toBe(element);
+    expect(action).toHaveFocus();
+    expect(element).not.toHaveAttribute('aria-live');
+
+    // An error that arrives as one starts in the alert region, and a later success is polite.
+    show({ id: 'upload', message: 'Upload failed', tone: 'error' });
+    const upload = toastOf('Upload failed');
+    expect(liveContainers(region).assertive).toContainElement(upload);
+    act(() => api().update('upload', { message: 'Uploaded', tone: 'success' }));
+    expect(toastOf('Uploaded')).toBe(upload);
+    expect(upload).toHaveAttribute('aria-live', 'polite');
+  });
+
+  it('moves the focus to the newest toast with F8, which pauses the timers', () => {
+    vi.useFakeTimers();
+    const { region } = renderToaster({}, <button type="button">Plan</button>);
+    expect(region).toHaveAttribute('aria-keyshortcuts', 'F8');
+    const plan = screen.getByRole('button', { name: 'Plan' });
+    act(() => plan.focus());
+    // Nothing to reach: the key stays with the page.
+    expect(fireEvent.keyDown(plan, { key: 'F8' })).toBe(true);
+
+    show({ message: 'Copied', duration: 1000 });
+    show({ message: 'Circuit deleted', action: { label: 'Undo', onClick: vi.fn() } });
+    expect(fireEvent.keyDown(plan, { key: 'F8', shiftKey: true })).toBe(true);
+    expect(plan).toHaveFocus();
+    expect(fireEvent.keyDown(plan, { key: 'F8' })).toBe(false);
+    expect(toastOf('Circuit deleted')).toHaveFocus();
+    expect(region).toHaveAttribute('data-paused');
+    advance(10_000);
+    expect(toastOf('Copied')).toBeInTheDocument();
+
+    fireEvent.keyDown(toastOf('Circuit deleted'), { key: 'Escape' });
+    expect(screen.queryByText('Circuit deleted')).toBeNull();
+    expect(plan).toHaveFocus();
+  });
+
+  it('takes another hotkey, or none', () => {
+    const { rerender } = renderToaster({ hotkey: 'F6' });
+    show({ message: 'Saved', duration: null });
+    fireEvent.keyDown(document.body, { key: 'F8' });
+    expect(toastOf('Saved')).not.toHaveFocus();
+    fireEvent.keyDown(document.body, { key: 'F6' });
+    expect(toastOf('Saved')).toHaveFocus();
+
+    act(() => toastOf('Saved').blur());
+    rerender(
+      <Toaster hotkey={null}>
+        <Capture />
+      </Toaster>,
+    );
+    expect(screen.getByRole('region')).not.toHaveAttribute('aria-keyshortcuts');
+    expect(fireEvent.keyDown(document.body, { key: 'F6' })).toBe(true);
+    expect(toastOf('Saved')).not.toHaveFocus();
+  });
+
+  it('runs the action and closes unless closes is false', async () => {
+    const onClick = vi.fn();
+    const onDismiss = vi.fn();
+    renderToaster();
+    show({ message: 'Circuit deleted', action: { label: 'Undo', onClick }, onDismiss });
+    show({ message: 'Update ready', action: { label: 'Details', onClick, closes: false } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(onClick).toHaveBeenCalledOnce();
+    expect(onDismiss).toHaveBeenCalledExactlyOnceWith('action');
+    expect(screen.queryByText('Circuit deleted')).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(onClick).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('Update ready')).toBeInTheDocument();
+  });
+
+  it('closes the focused toast on Escape unless it is not dismissible', () => {
+    const onDismiss = vi.fn();
+    renderToaster();
+    show({
+      message: 'Printing',
+      dismissible: false,
+      action: { label: 'Cancel', onClick: vi.fn() },
+    });
+    show({ message: 'Saved', duration: null, onDismiss });
+    expect(within(toastOf('Printing')).queryByRole('button', { name: 'Dismiss' })).toBeNull();
+
+    const cancel = within(toastOf('Printing')).getByRole('button', { name: 'Cancel' });
+    act(() => cancel.focus());
+    expect(fireEvent.keyDown(cancel, { key: 'Escape' })).toBe(true);
+    expect(screen.getByText('Printing')).toBeInTheDocument();
+
+    const dismiss = within(toastOf('Saved')).getByRole('button', { name: 'Dismiss' });
+    act(() => dismiss.focus());
+    // Handled here, so the app's own Escape shortcuts do not run as well.
+    expect(fireEvent.keyDown(dismiss, { key: 'Escape' })).toBe(false);
+    expect(screen.queryByText('Saved')).toBeNull();
+    expect(onDismiss).toHaveBeenCalledExactlyOnceWith('escape');
+  });
+
+  it('returns focus to where it came from when a focused toast goes', () => {
+    renderToaster({}, <button type="button">Save</button>);
+    const save = screen.getByRole('button', { name: 'Save' });
+    act(() => save.focus());
+    show({ message: 'Saved', duration: null });
+    const synced = show({ message: 'Synced', duration: null });
+    const dismiss = within(toastOf('Saved')).getByRole('button', { name: 'Dismiss' });
+    act(() => dismiss.focus());
+    fireEvent.keyDown(dismiss, { key: 'Escape' });
+    expect(screen.queryByText('Saved')).toBeNull();
+    expect(save).toHaveFocus();
+
+    // Also when code removes it.
+    act(() => within(toastOf('Synced')).getByRole('button', { name: 'Dismiss' }).focus());
+    expect(save).not.toHaveFocus();
+    act(() => api().dismiss(synced));
+    expect(screen.queryByText('Synced')).toBeNull();
+    expect(save).toHaveFocus();
+  });
+
+  it('skips a text field after a pointer dismissal, not after a keyboard one', async () => {
+    const user = userEvent.setup();
+    renderToaster({}, <input aria-label="Name" />);
+    const field = screen.getByLabelText('Name');
+
+    await user.click(field);
+    show({ message: 'Saved', duration: null });
+    await user.click(within(toastOf('Saved')).getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByText('Saved')).toBeNull();
+    expect(field).not.toHaveFocus();
+
+    await user.click(field);
+    show({ message: 'Synced', duration: null });
+    const dismiss = within(toastOf('Synced')).getByRole('button', { name: 'Dismiss' });
+    act(() => dismiss.focus());
+    // A click from the keyboard counts no clicks.
+    fireEvent.click(dismiss, { detail: 0 });
+    expect(screen.queryByText('Synced')).toBeNull();
+    expect(field).toHaveFocus();
+  });
+
+  it('leaves the focus alone when an action moved it on purpose', async () => {
+    renderToaster(
+      {},
+      <>
+        <button type="button">Save</button>
+        <input aria-label="Search" />
+      </>,
+    );
+    const save = screen.getByRole('button', { name: 'Save' });
+    const search = screen.getByLabelText('Search');
+    act(() => save.focus());
+    show({
+      message: 'Not found',
+      action: { label: 'Search again', onClick: () => search.focus() },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Search again' }));
+    expect(search).toHaveFocus();
+  });
+
+  it('stops its timers when the Toaster unmounts', () => {
+    vi.useFakeTimers();
+    const onDismiss = vi.fn();
+    const { unmount } = renderToaster();
+    show({ message: 'Saved', duration: 1000, onDismiss });
+    unmount();
+    advance(5000);
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('throws when useToast has no Toaster', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => render(<Capture />)).toThrow('useToast must be used inside a Toaster');
+  });
+
+  it('gives useOptionalToast the same API inside a Toaster and null outside', () => {
+    const seen: Array<ToastApi | null> = [];
+    function Optional() {
+      seen.push(useOptionalToast());
+      return null;
+    }
+    render(<Optional />);
+    expect(seen).toEqual([null]);
+
+    renderToaster({}, <Optional />);
+    expect(seen.at(-1)).toBe(api());
+    show({ message: 'Saved' });
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+  });
+});
+
+function Declarative({ mounted = true, ...props }: ToastProps & { mounted?: boolean }) {
+  return <Toaster>{mounted && <Toast {...props} />}</Toaster>;
+}
+
+describe('Toast', () => {
+  it('shows while mounted and open and updates in place', () => {
+    const onDismiss = vi.fn();
+    const props = { tone: 'warning', duration: null, onDismiss } as const;
+    const { rerender } = render(<Declarative {...props} message="You are offline" />);
+    const element = toastOf('You are offline');
+    expect(element).toHaveAttribute('data-tone', 'warning');
+
+    rerender(<Declarative {...props} message="Still offline" details="Changes wait" />);
+    expect(toastOf('Still offline')).toBe(element);
+    expect(within(element).getByText('Changes wait')).toBeInTheDocument();
+    rerender(<Declarative {...props} message="Still offline" />);
+    expect(screen.queryByText('Changes wait')).toBeNull();
+
+    rerender(<Declarative {...props} message="Still offline" open={false} />);
+    expect(screen.queryByText('Still offline')).toBeNull();
+    rerender(<Declarative {...props} message="Still offline" />);
+    expect(screen.getByText('Still offline')).toBeInTheDocument();
+
+    rerender(<Declarative {...props} message="Still offline" mounted={false} />);
+    expect(screen.queryByText('Still offline')).toBeNull();
+    // Closing or unmounting is the parent's own doing, so onDismiss stays quiet.
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('stays dismissed until its message changes', async () => {
+    const onDismiss = vi.fn();
+    const { rerender } = render(<Declarative message="Saved 10:01" onDismiss={onDismiss} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(onDismiss).toHaveBeenCalledExactlyOnceWith('button');
+    expect(screen.queryByText('Saved 10:01')).toBeNull();
+
+    rerender(<Declarative message="Saved 10:01" onDismiss={onDismiss} details="Again" />);
+    expect(screen.queryByText('Saved 10:01')).toBeNull();
+    rerender(<Declarative message="Saved 10:02" onDismiss={onDismiss} />);
+    expect(screen.getByText('Saved 10:02')).toBeInTheDocument();
+  });
+
+  it('shows once under StrictMode and still times out', () => {
+    vi.useFakeTimers();
+    render(
+      <StrictMode>
+        <Declarative message="Saved" duration={1000} />
+      </StrictMode>,
+    );
+    expect(screen.getAllByText('Saved')).toHaveLength(1);
+    advance(1000);
+    expect(screen.queryByText('Saved')).toBeNull();
+  });
+
+  it('leaves alone a toast that an imperative show with its id put in its place', async () => {
+    function Saving() {
+      const toast = useToast();
+      const [saving, setSaving] = useState(true);
+      const [message, setMessage] = useState('Saving');
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              toast.show({ id: 'save', message: 'Saved', tone: 'success', duration: null });
+              setSaving(false);
+            }}
+          >
+            Finish
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              toast.show({ id: 'save', message: 'Saved', tone: 'success', duration: null });
+              setMessage('Saving');
+            }}
+          >
+            Take over
+          </button>
+          <button type="button" onClick={() => setMessage('Still saving')}>
+            Change
+          </button>
+          <Toast id="save" open={saving} message={message} duration={null} />
+        </>
+      );
+    }
+    render(
+      <Toaster>
+        <Saving />
+      </Toaster>,
+    );
+    expect(toastOf('Saving')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Finish' }));
+    // Closing the declarative Toast does not withdraw the toast that replaced it.
+    expect(toastOf('Saved')).toHaveAttribute('data-tone', 'success');
+    expect(screen.queryByText('Saving')).toBeNull();
+  });
+
+  it('does not overwrite an imperative toast with its id on a render', async () => {
+    function Saving() {
+      const toast = useToast();
+      const [count, setCount] = useState(0);
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              toast.show({ id: 'save', message: 'Saved', tone: 'success', duration: null })
+            }
+          >
+            Take over
+          </button>
+          <button type="button" onClick={() => setCount((value) => value + 1)}>
+            Render {count}
+          </button>
+          <Toast id="save" message="Saving" duration={null} details={`Render ${count}`} />
+        </>
+      );
+    }
+    render(
+      <Toaster>
+        <Saving />
+      </Toaster>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Take over' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Render/ }));
+    expect(toastOf('Saved')).toHaveAttribute('data-tone', 'success');
+    expect(screen.queryByText('Saving')).toBeNull();
+  });
+
+  it('leaves a taken-over toast alone when its message or tone changes', async () => {
+    function Saving() {
+      const toast = useToast();
+      const [message, setMessage] = useState('Saving');
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              toast.show({ id: 'save', message: 'Saved', tone: 'success', duration: null })
+            }
+          >
+            Take over
+          </button>
+          <button type="button" onClick={() => setMessage('Saving 50%')}>
+            Progress
+          </button>
+          <button type="button" onClick={() => setOpen((value) => !value)}>
+            Toggle
+          </button>
+          <Toast
+            id="save"
+            open={open}
+            message={message}
+            tone={message === 'Saving' ? 'neutral' : 'warning'}
+            duration={null}
+          />
+        </>
+      );
+    }
+    render(
+      <Toaster>
+        <Saving />
+      </Toaster>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Take over' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Progress' }));
+    expect(toastOf('Saved')).toHaveAttribute('data-tone', 'success');
+    expect(screen.queryByText('Saving 50%')).toBeNull();
+    // Opening again shows the declarative toast in place of the imperative one.
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle' }));
+    expect(toastOf('Saved')).toHaveAttribute('data-tone', 'success');
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle' }));
+    expect(toastOf('Saving 50%')).toBeInTheDocument();
+    expect(screen.queryByText('Saved')).toBeNull();
+  });
+
+  it('keeps a persistent declarative toast when timed toasts push past max', () => {
+    vi.useFakeTimers();
+    const view = render(
+      <Toaster max={3}>
+        <Capture />
+        <Toast tone="warning" message="You are offline" duration={null} dismissible={false} />
+      </Toaster>,
+    );
+    show({ message: 'A', duration: 1000 });
+    show({ message: 'B', duration: 1000 });
+    show({ message: 'C', duration: 1000 });
+    expect(toastOf('You are offline')).toBeInTheDocument();
+    advance(1000);
+    view.rerender(
+      <Toaster max={3}>
+        <Capture />
+        <Toast tone="warning" message="You are offline" duration={null} dismissible={false} />
+      </Toaster>,
+    );
+    expect(toastOf('You are offline')).toBeInTheDocument();
+  });
+
+  it('renders nothing outside a Toaster, so a component can also render on its own', () => {
+    const { container } = render(
+      <section aria-label="Print copy">
+        <Toast message="Saved" tone="success" />
+      </section>,
+    );
+    expect(container.querySelector('[data-tone]')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Print copy' })).toBeEmptyDOMElement();
+  });
+
+  it('keeps its timer through renders that change nothing it shows', () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<Declarative message="Saved" duration={1000} />);
+    advance(600);
+    rerender(
+      <Declarative message="Saved" duration={1000} action={{ label: 'Open', onClick() {} }} />,
+    );
+    advance(400);
+    expect(screen.queryByText('Saved')).toBeNull();
+  });
+});

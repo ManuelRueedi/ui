@@ -105,6 +105,85 @@ export const Sizes: Story = {
   },
 };
 
+function SearchFields() {
+  return (
+    <div className="story-form" style={{ width: 320 }}>
+      <Input label="Search rooms" type="search" placeholder="Search" />
+      <Input
+        label="Search circuits"
+        type="search"
+        prefix={<Search size={14} />}
+        defaultValue="Kitchen"
+      />
+      <Input label="Small search" type="search" size="sm" defaultValue="F1" />
+      <Input label="Large search" type="search" size="lg" defaultValue="Kitchen" />
+      <Input label="Disabled search" type="search" disabled defaultValue="Kitchen" />
+      <Input label="Read-only search" type="search" readOnly defaultValue="Kitchen" />
+    </div>
+  );
+}
+
+/**
+ * The rules for the browser's clear button. getComputedStyle cannot read that pseudo-element, but
+ * the browser drops rules whose selector it does not understand, so the rules found here apply.
+ */
+function clearButtonRules(media?: string) {
+  const isClearButton = (rule: CSSRule): rule is CSSStyleRule =>
+    rule instanceof CSSStyleRule &&
+    rule.selectorText.includes('Input-input') &&
+    rule.selectorText.includes('::-webkit-search-cancel-button');
+  return Array.from(document.styleSheets).flatMap((sheet) => {
+    try {
+      const rules = Array.from(sheet.cssRules);
+      if (!media) return rules.filter(isClearButton);
+      return rules
+        .filter(
+          (rule): rule is CSSMediaRule =>
+            rule instanceof CSSMediaRule && rule.conditionText.includes(media),
+        )
+        .flatMap((rule) => Array.from(rule.cssRules).filter(isClearButton));
+    } catch {
+      return [];
+    }
+  });
+}
+
+export const SearchField: Story = {
+  name: 'Search',
+  parameters: staticStory,
+  render: () => <SearchFields />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole('searchbox', { name: 'Search rooms' });
+    await expect(input).toHaveAttribute('type', 'search');
+    await userEvent.type(input, 'Bath');
+    await expect(input).toHaveValue('Bath');
+    // A gray cross drawn by ui, not the blue one of the browser; none on locked fields.
+    const rules = clearButtonRules();
+    const cross = rules.find((rule) => rule.style.getPropertyValue('appearance') === 'none');
+    await expect(cross?.style.getPropertyValue('background-color')).toBe('var(--fg-3)');
+    await expect(cross?.style.getPropertyValue('mask')).toContain('var(--input-clear-icon)');
+    await expect(rules.some((rule) => rule.selectorText.includes(':hover'))).toBe(true);
+    const locked = rules.find((rule) => rule.style.getPropertyValue('display') === 'none');
+    await expect(locked?.selectorText).toContain(':disabled');
+    await expect(locked?.selectorText).toContain('[readonly]');
+    // Forced colours would paint the cross in the field's own colour; it keeps a system colour.
+    const forced = clearButtonRules('forced-colors: active');
+    const forcedCross = forced.find((rule) => !rule.selectorText.includes(':hover'));
+    await expect(forcedCross?.style.getPropertyValue('forced-color-adjust')).toBe('none');
+    await expect(forcedCross?.style.getPropertyValue('background-color').toLowerCase()).toBe(
+      'fieldtext',
+    );
+    await expect(forced.some((rule) => rule.selectorText.includes(':hover'))).toBe(true);
+  },
+};
+
+export const SearchDark: Story = {
+  name: 'A11y / Search dark',
+  ...darkA11y,
+  render: () => <SearchFields />,
+};
+
 export const DarkMode: Story = {
   name: 'A11y / Dark mode',
   ...darkA11y,

@@ -1,0 +1,337 @@
+/*
+ * Hooks for apps: --sheet-z (non-modal stacking, default 30; not for a wide inline column),
+ * --sheet-max-height (the tallest a sheet gets), --sheet-body-padding (default 16px),
+ * --sheet-footer-padding (default 12px 16px) and --sheet-height (set by the component while it
+ * snaps or is dragged).
+ */
+
+.sheet {
+  --sheet-width: 520px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  box-sizing: border-box;
+  color: var(--fg-1);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.sm {
+  --sheet-width: 360px;
+}
+
+.md {
+  --sheet-width: 520px;
+}
+
+.lg {
+  --sheet-width: 720px;
+}
+
+/* A closed native dialog stays hidden although the sheet sets its own display. */
+.modal:not([open]) {
+  display: none;
+}
+
+.modal:not([open]),
+.modal:not([open])::backdrop {
+  pointer-events: none;
+}
+
+.modal::backdrop {
+  backdrop-filter: blur(var(--space-1));
+  background-color: color-mix(in srgb, var(--bg-1) 68%, transparent);
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    color-mix(in srgb, var(--fg-1) 18%, transparent) 0.75px,
+    transparent 1px
+  );
+  background-size: var(--loading-grid-size) var(--loading-grid-size);
+}
+
+/* A wide inline column sits in the parent's flow: no stacking layer of its own. :where keeps the
+   specificity of .inplace, so an app's class still wins. */
+.inplace:not(:where(.wide-inline)) {
+  z-index: var(--sheet-z, 30);
+}
+
+/* Phones: along the bottom edge, full width, clear of the rounded corners and the home bar. */
+
+.phone {
+  border-radius: var(--radius-1) var(--radius-1) 0 0;
+  border-width: 1px 0 0;
+  bottom: 0;
+  box-shadow: var(--shadow-popover);
+  height: auto;
+  left: 0;
+  margin: 0;
+  max-height: var(--sheet-max-height, 88dvh);
+  max-width: none;
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  right: 0;
+  top: auto;
+  width: 100%;
+}
+
+.inplace.phone {
+  position: fixed;
+}
+
+.inplace.contained:not(:where(.wide-inline)) {
+  position: absolute;
+}
+
+.inplace.contained.phone {
+  max-height: var(--sheet-max-height, 100%);
+}
+
+.snapping {
+  height: var(--sheet-height, auto);
+  max-height: var(--sheet-max-height, none);
+}
+
+.inplace.contained.snapping {
+  max-height: var(--sheet-max-height, 100%);
+}
+
+.snapping[data-snap='full'] {
+  border-radius: 0;
+}
+
+/* Full fills the visual viewport, so its header keeps clear of the status bar (viewport-fit=cover).
+   A contained sheet fills the app's box, which keeps clear of it itself. */
+.snapping[data-snap='full']:not(.contained) .header {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.snapping[data-snap='peek'] .body {
+  overflow-y: hidden;
+}
+
+.snapping[data-snap='full'] .body {
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+}
+
+.snapping[data-dragging] {
+  user-select: none;
+}
+
+/* Wider screens: a bottom sheet capped by the size, a centred dialog, or placed by the parent. */
+
+.wide-sheet,
+.wide-dialog {
+  bottom: 0;
+  box-shadow: var(--shadow-popover);
+  left: 0;
+  max-height: var(--sheet-max-height, min(760px, calc(100dvh - var(--space-8))));
+  max-width: calc(100vw - var(--space-8));
+  right: 0;
+  width: min(var(--sheet-width), calc(100vw - var(--space-8)));
+}
+
+.wide-sheet {
+  border-bottom-width: 0;
+  border-radius: var(--radius-1) var(--radius-1) 0 0;
+  height: auto;
+  margin: 0 auto;
+  top: auto;
+}
+
+.wide-dialog {
+  height: fit-content;
+  margin: auto;
+  top: 0;
+}
+
+.inplace.wide-sheet,
+.inplace.wide-dialog {
+  position: fixed;
+}
+
+.inplace.contained.wide-sheet,
+.inplace.contained.wide-dialog {
+  position: absolute;
+}
+
+/* Header, body and footer. */
+
+.header {
+  align-items: start;
+  display: grid;
+  gap: var(--space-1) var(--space-3);
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: var(--space-4);
+}
+
+.header.title-only {
+  align-items: center;
+}
+
+.header.with-handle {
+  padding-top: 0;
+}
+
+.handle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-1);
+  color: inherit;
+  cursor: ns-resize;
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: center;
+  margin: 0 calc(var(--space-4) * -1);
+  /* 44 px on touch screens, like the other controls. */
+  min-height: max(var(--space-6), var(--tap-target));
+  padding: 0;
+  touch-action: none;
+}
+
+.handle:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
+.grip {
+  background: var(--border-2);
+  border-radius: var(--radius-1);
+  height: var(--space-1);
+  width: var(--space-10);
+}
+
+.handle:hover .grip,
+.handle:focus-visible .grip {
+  background: var(--fg-4);
+  width: var(--space-12);
+}
+
+.title {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* Only the default title and description: content passed as heading keeps its own styles. */
+.heading {
+  color: var(--fg-1);
+  font-size: 15px;
+  font-weight: var(--fw-semibold);
+  line-height: 1.3;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.description {
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: var(--fw-regular);
+  line-height: 1.35;
+  margin: 0;
+  max-width: 58ch;
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-1);
+}
+
+.body {
+  border-top: 1px solid var(--border-1);
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  padding: var(--sheet-body-padding, var(--space-4));
+  /* Content keeps its width when a classic scroll bar comes and goes (peek, full, longer text). */
+  scrollbar-gutter: stable;
+}
+
+.footer {
+  align-items: center;
+  border-top: 1px solid var(--border-1);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  padding: var(--sheet-footer-padding, var(--space-3) var(--space-4));
+}
+
+/* On short screens a full sheet scrolls as a whole, so the header and footer leave room. */
+@media (max-height: 600px) {
+  .snapping[data-snap='full']:is([open], .inplace) {
+    display: block;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+  }
+
+  .snapping[data-snap='full'] .body {
+    overflow: visible;
+  }
+}
+
+/* Motion, unless the user asks for less. */
+
+.animated.snapping {
+  transition: height var(--dur-slow) var(--ease-out);
+}
+
+.animated.modal {
+  transition-behavior: allow-discrete;
+  transition-duration: var(--dur-slow);
+  transition-property: opacity, transform, height, display, overlay;
+  transition-timing-function: var(--ease-out);
+}
+
+.animated.modal::backdrop {
+  transition-behavior: allow-discrete;
+  transition-duration: var(--dur-base);
+  transition-property: opacity, display, overlay;
+  transition-timing-function: var(--ease-out);
+}
+
+.animated.modal:not([open]),
+.animated.modal:not([open])::backdrop {
+  opacity: 0;
+}
+
+.animated.modal.phone:not([open]),
+.animated.modal.wide-sheet:not([open]) {
+  transform: translateY(100%);
+}
+
+.animated.modal.wide-dialog:not([open]) {
+  transform: translateY(var(--space-2)) scale(0.98);
+}
+
+@starting-style {
+  .animated.modal[open]::backdrop {
+    opacity: 0;
+  }
+
+  .animated.modal.phone[open],
+  .animated.modal.wide-sheet[open] {
+    transform: translateY(100%);
+  }
+
+  .animated.modal.wide-dialog[open] {
+    opacity: 0;
+    transform: translateY(var(--space-2)) scale(0.98);
+  }
+}
+
+.animated[data-dragging] {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .sheet::backdrop {
+    transition: none;
+  }
+}
