@@ -15,7 +15,7 @@ const meta = {
   component: Select,
   args: { label: 'Control type', options, placeholder: 'Choose…', size: 'md' },
   argTypes: {
-    size: { control: 'radio', options: ['md', 'lg'] },
+    size: { control: 'radio', options: ['sm', 'md', 'lg'] },
     variant: { control: 'radio', options: ['default', 'plain'] },
   },
   render: (args) => (
@@ -56,4 +56,55 @@ export const AllStates: Story = {
   },
 };
 
-export const DarkMode: Story = { name: 'A11y / Dark mode', ...darkA11y, render: () => <States /> };
+const groupedOptions = [
+  {
+    label: 'Kitchen',
+    options: [
+      { value: 'f1-1', label: 'F1.1 Cooker' },
+      { value: 'f1-2', label: 'F1.2 Sockets' },
+    ],
+  },
+  {
+    label: 'Bathroom',
+    options: [
+      { value: 'f1-3', label: 'F1.3 Light' },
+      { value: 'f1-4', label: 'F1.4 Heater', disabled: true },
+    ],
+  },
+  { value: 'new', label: 'New circuit' },
+];
+
+function GroupsAndSizes() {
+  return (
+    <div className="story-form">
+      <Select label="Circuit" options={groupedOptions} placeholder="Choose…" />
+      <Select label="Read only group" options={groupedOptions} defaultValue="f1-3" readOnly />
+      <Select label="Small" size="sm" options={options} defaultValue="final" />
+    </div>
+  );
+}
+
+export const GroupsAndSmall: Story = {
+  name: 'Groups and small size',
+  parameters: staticStory,
+  render: () => <GroupsAndSizes />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const circuit = canvas.getByLabelText('Circuit');
+    await expect(circuit.querySelectorAll('optgroup')).toHaveLength(2);
+    await userEvent.selectOptions(circuit, 'f1-2');
+    await expect(circuit).toHaveValue('f1-2');
+    await expect(canvas.getByLabelText('Read only group')).toHaveValue('F1.3 Light');
+  },
+};
+
+export const DarkMode: Story = {
+  name: 'A11y / Dark mode',
+  ...darkA11y,
+  render: () => (
+    <>
+      <States />
+      <GroupsAndSizes />
+    </>
+  ),
+};

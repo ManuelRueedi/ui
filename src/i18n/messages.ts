@@ -19,6 +19,7 @@ export const en = {
     closeMenu: (name: string) => `Close account menu for ${name}`,
   },
   dialog: { close: 'Close dialog' },
+  sheet: { close: 'Close', expand: 'Expand', collapse: 'Collapse' },
   editable: {
     add: 'Add',
     edit: 'Edit',
@@ -57,6 +58,8 @@ export const en = {
     satellite: 'Satellite',
   },
   menu: { more: 'More options' },
+  pageLoading: { label: 'Loading page' },
+  toast: { region: 'Notifications', dismiss: 'Dismiss' },
   offline: 'Offline',
 };
 
@@ -81,6 +84,7 @@ export const deCH: UiMessages = {
     closeMenu: (name: string) => `Kontomenü für ${name} schliessen`,
   },
   dialog: { close: 'Dialog schliessen' },
+  sheet: { close: 'Schliessen', expand: 'Ganz öffnen', collapse: 'Verkleinern' },
   editable: {
     add: 'Hinzufügen',
     edit: 'Bearbeiten',
@@ -119,6 +123,8 @@ export const deCH: UiMessages = {
     satellite: 'Satellit',
   },
   menu: { more: 'Weitere Optionen' },
+  pageLoading: { label: 'Seite wird geladen' },
+  toast: { region: 'Mitteilungen', dismiss: 'Mitteilung schliessen' },
   offline: 'Offline',
 };
 
@@ -141,6 +147,7 @@ export const frCH: UiMessages = {
     closeMenu: (name: string) => `Fermer le menu du compte de ${name}`,
   },
   dialog: { close: 'Fermer la boîte de dialogue' },
+  sheet: { close: 'Fermer', expand: 'Ouvrir en entier', collapse: 'Réduire' },
   editable: {
     add: 'Ajouter',
     edit: 'Modifier',
@@ -179,6 +186,8 @@ export const frCH: UiMessages = {
     satellite: 'Satellite',
   },
   menu: { more: 'Plus d’options' },
+  pageLoading: { label: 'Chargement de la page' },
+  toast: { region: 'Notifications', dismiss: 'Fermer la notification' },
   offline: 'Hors ligne',
 };
 
@@ -201,6 +210,7 @@ export const itCH: UiMessages = {
     closeMenu: (name: string) => `Chiudi il menu account di ${name}`,
   },
   dialog: { close: 'Chiudi la finestra di dialogo' },
+  sheet: { close: 'Chiudi', expand: 'Apri del tutto', collapse: 'Riduci' },
   editable: {
     add: 'Aggiungi',
     edit: 'Modifica',
@@ -239,6 +249,8 @@ export const itCH: UiMessages = {
     satellite: 'Satellite',
   },
   menu: { more: 'Altre opzioni' },
+  pageLoading: { label: 'Caricamento della pagina' },
+  toast: { region: 'Notifiche', dismiss: 'Chiudi la notifica' },
   offline: 'Offline',
 };
 

@@ -24,7 +24,7 @@ export type InputProps = Omit<
 > & {
   label?: string;
   hideLabel?: boolean;
-  size?: 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg';
   variant?: 'default' | 'plain';
   type?: InputType;
   description?: string;

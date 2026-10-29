@@ -7,7 +7,7 @@ import styles from './Textarea.module.css';
 export type TextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'children'> & {
   label?: string;
   hideLabel?: boolean;
-  size?: 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg';
   variant?: 'default' | 'plain';
   description?: string;
   error?: string;

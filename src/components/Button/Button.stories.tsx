@@ -254,6 +254,72 @@ export const Async: Story = {
   },
 };
 
+const longLabel = 'Ausgewählte Verteilerkasten auf die andere Seite der Wand verschieben';
+
+function WrapList() {
+  return (
+    <div className="story-stack" style={{ width: 240 }}>
+      <Button wrap>{longLabel}</Button>
+      <Button wrap variant="primary">
+        <Save size={15} strokeWidth={1.75} />
+        Prüfprotokoll vom 12. Mai 2026 öffnen
+      </Button>
+      <Button wrap disabled>
+        Gesperrt, weil jemand anderes die Wand gerade bearbeitet
+      </Button>
+      <Button wrap state="loading">
+        {longLabel}
+      </Button>
+      <Button wrap state="success">
+        {longLabel}
+      </Button>
+      <Button wrap state="error">
+        {longLabel}
+      </Button>
+      <Button wrap>Kurz</Button>
+    </div>
+  );
+}
+
+export const Wrap: Story = {
+  name: 'Long labels that wrap',
+  parameters: { ...staticStory, language: 'de-CH' },
+  render: () => <WrapList />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const long = canvas.getByRole('button', { name: longLabel });
+    const short = canvas.getByRole('button', { name: 'Kurz' });
+    const style = getComputedStyle(long);
+    // The label breaks onto more lines, starts at the leading edge and keeps the control height.
+    await expect(long.offsetHeight).toBeGreaterThan(short.offsetHeight);
+    await expect(long.offsetWidth).toBeLessThanOrEqual(240);
+    await expect(style.whiteSpace).toBe('normal');
+    await expect(style.textAlign).toBe('start');
+    await expect(short.offsetHeight).toBe(Number.parseFloat(style.minHeight));
+    const label = long.querySelector('[class*="idle-content"]') as HTMLElement;
+    await expect(label.getBoundingClientRect().left - long.getBoundingClientRect().left).toBe(
+      Number.parseFloat(style.paddingLeft) + 1,
+    );
+    // The status of a busy button stays centred over the whole button.
+    const busy = canvas.getByRole('button', { name: 'Wird bearbeitet' });
+    const status = busy.querySelector('[role="status"]') as HTMLElement;
+    const busyRect = busy.getBoundingClientRect();
+    const statusRect = status.getBoundingClientRect();
+    await expect(
+      Math.abs(statusRect.left + statusRect.width / 2 - (busyRect.left + busyRect.width / 2)),
+    ).toBeLessThan(2);
+    await userEvent.tab();
+    await expect(long).toHaveFocus();
+  },
+};
+
+export const WrapDark: Story = {
+  name: 'A11y / Long labels dark',
+  ...darkA11y,
+  parameters: { ...darkA11y.parameters, language: 'de-CH' },
+  render: () => <WrapList />,
+};
+
 export const DarkMode: Story = {
   name: 'A11y / Dark mode',
   ...darkA11y,

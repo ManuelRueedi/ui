@@ -11,13 +11,20 @@ import {
   type ReactNode,
 } from 'react';
 import { cx } from '../../internal/cx';
+import {
+  anchoredPosition,
+  clamp,
+  fitsOnSide,
+  fixedBoundary,
+  isPopoverOpen,
+  setPopoverOpen,
+  shiftInside,
+  sideOrder,
+} from '../../internal/placement';
 import styles from './Tooltip.module.css';
 
 export type TooltipPlacement = 'top' | 'right' | 'bottom' | 'left';
 export type TooltipCollision = 'flip' | 'shift' | 'none';
-
-type TooltipSize = Pick<DOMRect, 'width' | 'height'>;
-type BoundaryRect = Pick<DOMRect, 'top' | 'right' | 'bottom' | 'left' | 'width' | 'height'>;
 
 export type TooltipProps = Omit<HTMLAttributes<HTMLSpanElement>, 'content'> & {
   /** Plain tooltip text. Use `tooltip` for richer content. */
@@ -31,6 +38,11 @@ export type TooltipProps = Omit<HTMLAttributes<HTMLSpanElement>, 'content'> & {
   disabled?: boolean;
   /** Also opens on a tap; a tap elsewhere closes it. */
   openOnTouch?: boolean;
+  /**
+   * Links the tooltip to the focusable child as its description. Turn it off when the tooltip
+   * only repeats the child's accessible name, as on an icon button.
+   */
+  describe?: boolean;
   children?: ReactNode;
 };
 
@@ -40,88 +52,21 @@ const arrowInset = 10;
 const focusableSelector =
   'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function opposite(placement: TooltipPlacement): TooltipPlacement {
-  if (placement === 'top') return 'bottom';
-  if (placement === 'bottom') return 'top';
-  if (placement === 'left') return 'right';
-  return 'left';
-}
-
-function fallbackOrder(placement: TooltipPlacement): TooltipPlacement[] {
-  if (placement === 'top' || placement === 'bottom') {
-    return [placement, opposite(placement), 'right', 'left'];
+// Keyboard focus opens the tooltip; a script restoring focus after a mouse action does not.
+function focusVisible(element: EventTarget) {
+  if (!(element instanceof Element)) return true;
+  try {
+    return element.matches(':focus-visible');
+  } catch {
+    // Browsers without :focus-visible keep the old behavior.
+    return true;
   }
-  return [placement, opposite(placement), 'bottom', 'top'];
-}
-
-function hasRoom(
-  placement: TooltipPlacement,
-  triggerRect: DOMRect,
-  tooltipRect: TooltipSize,
-  boundaryRect: BoundaryRect,
-) {
-  if (placement === 'top') {
-    return triggerRect.top - boundaryRect.top - viewportMargin >= tooltipRect.height + gap;
-  }
-  if (placement === 'bottom') {
-    return boundaryRect.bottom - triggerRect.bottom - viewportMargin >= tooltipRect.height + gap;
-  }
-  if (placement === 'left') {
-    return triggerRect.left - boundaryRect.left - viewportMargin >= tooltipRect.width + gap;
-  }
-  return boundaryRect.right - triggerRect.right - viewportMargin >= tooltipRect.width + gap;
-}
-
-function coordinates(placement: TooltipPlacement, triggerRect: DOMRect, tooltipRect: TooltipSize) {
-  if (placement === 'top') {
-    return {
-      nextX: triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2,
-      nextY: triggerRect.top - tooltipRect.height - gap,
-    };
-  }
-  if (placement === 'bottom') {
-    return {
-      nextX: triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2,
-      nextY: triggerRect.bottom + gap,
-    };
-  }
-  if (placement === 'left') {
-    return {
-      nextX: triggerRect.left - tooltipRect.width - gap,
-      nextY: triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2,
-    };
-  }
-  return {
-    nextX: triggerRect.right + gap,
-    nextY: triggerRect.top + triggerRect.height / 2 - tooltipRect.height / 2,
-  };
-}
-
-function createsFixedContainingBlock(style: CSSStyleDeclaration) {
-  const willChange = style.willChange ?? '';
-  const contain = style.contain ?? '';
-  return (
-    (style.transform && style.transform !== 'none') ||
-    (style.perspective && style.perspective !== 'none') ||
-    (style.filter && style.filter !== 'none') ||
-    (style.backdropFilter && style.backdropFilter !== 'none') ||
-    contain.includes('paint') ||
-    contain.includes('layout') ||
-    contain.includes('strict') ||
-    contain.includes('content') ||
-    willChange.includes('transform') ||
-    willChange.includes('perspective') ||
-    willChange.includes('filter')
-  );
 }
 
 /**
- * Shows a short hint on hover and focus. The tooltip sits in the browser's top layer, so cards
- * and dialogs do not clip it. The position is set straight on the element, without re-rendering.
+ * Shows a short hint on hover and keyboard focus. The tooltip sits in the browser's top layer, so
+ * cards and dialogs do not clip it. The position is set straight on the element, without
+ * re-rendering.
  */
 export function Tooltip({
   id,
@@ -133,6 +78,7 @@ export function Tooltip({
   maxWidth = '240px',
   disabled = false,
   openOnTouch = false,
+  describe = true,
   className,
   children,
   onPointerEnter,
@@ -155,25 +101,12 @@ export function Tooltip({
   const settings = useRef({ placement, fallbackPlacements, collision });
   settings.current = { placement, fallbackPlacements, collision };
 
-  const inTopLayer = useCallback(() => {
-    const element = tooltipElement.current;
-    return Boolean(element && 'showPopover' in element && element.matches(':popover-open'));
-  }, []);
+  const inTopLayer = useCallback(() => isPopoverOpen(tooltipElement.current), []);
 
   // The top layer keeps tooltips above field wrappers and cards that form their own stacking context.
-  const setTopLayer = useCallback(
-    (open: boolean) => {
-      const element = tooltipElement.current;
-      if (!element || !('showPopover' in element)) return;
-      try {
-        if (open && !inTopLayer()) element.showPopover();
-        if (!open && inTopLayer()) element.hidePopover();
-      } catch {
-        // A disconnected element cannot change layers; nothing to undo.
-      }
-    },
-    [inTopLayer],
-  );
+  const setTopLayer = useCallback((open: boolean) => {
+    setPopoverOpen(tooltipElement.current, open);
+  }, []);
 
   const updatePosition = useCallback(() => {
     const triggerNode = trigger.current;
@@ -182,7 +115,7 @@ export function Tooltip({
     const { placement, fallbackPlacements, collision } = settings.current;
 
     const placementOrder = () => {
-      const order = fallbackPlacements?.length ? fallbackPlacements : fallbackOrder(placement);
+      const order = fallbackPlacements?.length ? fallbackPlacements : sideOrder(placement);
       const unique = Array.from(new Set(order));
       return unique.includes(placement) ? unique : [placement, ...unique];
     };
@@ -193,32 +126,31 @@ export function Tooltip({
 
     const triggerRect = triggerNode.getBoundingClientRect();
     const tooltipRect = { width: element.offsetWidth, height: element.offsetHeight };
-    const boundaryRect = fixedBoundaryRect(element);
+    // Top-layer elements are positioned against the viewport, whatever their ancestors do.
+    const boundaryRect = fixedBoundary(element, inTopLayer());
     const nextPlacement =
       collision === 'flip'
         ? (placementOrder().find((candidate) =>
-            hasRoom(candidate, triggerRect, tooltipRect, boundaryRect),
+            fitsOnSide(candidate, triggerRect, tooltipRect, boundaryRect, gap, viewportMargin),
           ) ?? placement)
         : placement;
-    const { nextX, nextY } = coordinates(nextPlacement, triggerRect, tooltipRect);
+    const { x: nextX, y: nextY } = anchoredPosition(
+      nextPlacement,
+      'center',
+      triggerRect,
+      tooltipRect,
+      gap,
+    );
     const clampedX = shouldClampX(nextPlacement)
-      ? clamp(
-          nextX,
-          boundaryRect.left + viewportMargin,
-          Math.max(
-            boundaryRect.left + viewportMargin,
-            boundaryRect.right - tooltipRect.width - viewportMargin,
-          ),
-        )
+      ? shiftInside(nextX, tooltipRect.width, boundaryRect.left, boundaryRect.right, viewportMargin)
       : nextX;
     const clampedY = shouldClampY(nextPlacement)
-      ? clamp(
+      ? shiftInside(
           nextY,
-          boundaryRect.top + viewportMargin,
-          Math.max(
-            boundaryRect.top + viewportMargin,
-            boundaryRect.bottom - tooltipRect.height - viewportMargin,
-          ),
+          tooltipRect.height,
+          boundaryRect.top,
+          boundaryRect.bottom,
+          viewportMargin,
         )
       : nextY;
 
@@ -243,27 +175,6 @@ export function Tooltip({
     element.style.setProperty('--tooltip-y', `${Math.round(clampedY - boundaryRect.top)}px`);
     element.style.setProperty('--tooltip-arrow-x', `${arrowX}px`);
     element.style.setProperty('--tooltip-arrow-y', `${arrowY}px`);
-
-    function fixedBoundaryRect(node: HTMLElement): BoundaryRect {
-      // Top-layer elements are positioned against the viewport, whatever their ancestors do.
-      if (!inTopLayer()) {
-        let current = node.parentElement;
-        while (current && current !== document.documentElement) {
-          if (createsFixedContainingBlock(window.getComputedStyle(current))) {
-            return current.getBoundingClientRect();
-          }
-          current = current.parentElement;
-        }
-      }
-      return {
-        top: 0,
-        right: window.innerWidth,
-        bottom: window.innerHeight,
-        left: 0,
-        width: window.innerWidth,
-        height: window.innerHeight,
-      };
-    }
   }, [inTopLayer]);
 
   const setFlags = useCallback((positioned: boolean, ready: boolean, open: boolean) => {
@@ -333,7 +244,7 @@ export function Tooltip({
   // The focusable element inside the anchor gets the tooltip as its description.
   useEffect(() => {
     const anchor = trigger.current;
-    if (!anchor || !hasTooltip) return;
+    if (!anchor || !hasTooltip || !describe) return;
     const target = anchor.matches(focusableSelector)
       ? anchor
       : anchor.querySelector<HTMLElement>(focusableSelector);
@@ -346,7 +257,7 @@ export function Tooltip({
       if (previous) target.setAttribute('aria-describedby', previous);
       else target.removeAttribute('aria-describedby');
     };
-  }, [hasTooltip, tooltipId, children]);
+  }, [hasTooltip, describe, tooltipId, children]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -396,7 +307,7 @@ export function Tooltip({
           onPointerLeave?.(event);
         }}
         onFocus={(event) => {
-          show();
+          if (focusVisible(event.target)) show();
           onFocus?.(event);
         }}
         onBlur={(event) => {

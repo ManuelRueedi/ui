@@ -46,6 +46,21 @@ describe('Button', () => {
     expect(screen.getByRole('link', { name: 'Open' })).toHaveAttribute('href', '/projects');
   });
 
+  it('lets a long label wrap on request, on buttons and links', () => {
+    const { rerender } = render(<Button>Save</Button>);
+    expect(screen.getByRole('button').className).not.toContain('wrap');
+    rerender(<Button wrap>Move the selected boxes to the other side of the board</Button>);
+    expect(screen.getByRole('button').className).toContain('wrap');
+    expect(screen.getByRole('button')).not.toHaveAttribute('wrap');
+    rerender(
+      <Button wrap href="/records/1">
+        Inspection record of 12 May
+      </Button>,
+    );
+    expect(screen.getByRole('link').className).toContain('wrap');
+    expect(screen.getByRole('link')).not.toHaveAttribute('wrap');
+  });
+
   it('marks itself as a spotlight surface', () => {
     render(<Button variant="primary">Go</Button>);
     const button = screen.getByRole('button');

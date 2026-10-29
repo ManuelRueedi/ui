@@ -2,7 +2,9 @@ import { X } from 'lucide-react';
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
+  useState,
   type DialogHTMLAttributes,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -11,9 +13,13 @@ import {
 } from 'react';
 import { useUiMessages } from '../../i18n/UiProvider';
 import { cx } from '../../internal/cx';
+import { escapeUsedInside } from '../../internal/escape';
 import { useMergedRefs } from '../../internal/refs';
 import { IconButton } from '../IconButton/IconButton';
 import styles from './Dialog.module.css';
+
+/** What closed the dialog: the close button, Escape (or another close request), or the backdrop. */
+export type DialogCloseReason = 'button' | 'escape' | 'backdrop';
 
 export type DialogProps = Omit<
   DialogHTMLAttributes<HTMLDialogElement>,
@@ -22,10 +28,14 @@ export type DialogProps = Omit<
   open: boolean;
   title: string;
   description?: string;
-  size?: 'sm' | 'md' | 'lg';
+  /** `xl` is a wide work surface (previews, libraries) that may use the full viewport height. */
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   closeLabel?: string;
-  /** Called when the user closes the dialog (close button, Escape or a click on the backdrop). */
-  onClose?: () => void;
+  /**
+   * Called when the user asks to close the dialog. The dialog stays open until the parent sets
+   * `open` to false, so a parent can ignore a reason, e.g. 'backdrop' while a form holds input.
+   */
+  onClose?: (reason: DialogCloseReason) => void;
   footer?: ReactNode;
   children?: ReactNode;
   ref?: Ref<HTMLDialogElement>;
@@ -43,6 +53,7 @@ export function Dialog({
   footer,
   children,
   className,
+  'aria-describedby': describedBy,
   ref: forwardedRef,
   ...rest
 }: DialogProps) {
@@ -55,6 +66,10 @@ export function Dialog({
   const ref = useMergedRefs(forwardedRef, dialog);
   const latest = useRef({ open, onClose });
   latest.current = { open, onClose };
+  // A close request the browser does not let us cancel still closes the native dialog.
+  const closeReported = useRef(false);
+  // Bumped when the browser closed the dialog by itself, so the effect below can reopen it.
+  const [nativeCloses, setNativeCloses] = useState(0);
 
   useEffect(() => {
     const element = dialog.current;
@@ -67,12 +82,41 @@ export function Dialog({
       if (typeof element.close === 'function') element.close();
       else element.removeAttribute('open');
     }
-  }, [open]);
+  }, [open, nativeCloses]);
 
-  function requestClose() {
+  // Closed by the layout cleanup below; that close is not the user's.
+  const hidden = useRef(false);
+  const layoutRuns = useRef(0);
+
+  // Unmounting an open dialog closes it first, so the browser returns focus to the opener.
+  // A Suspense boundary that hides this tree runs the same cleanup and later runs the effect
+  // again: then the dialog opens again if the parent still has it open.
+  useLayoutEffect(() => {
+    const element = dialog.current;
+    layoutRuns.current += 1;
+    if (
+      layoutRuns.current > 1 &&
+      element &&
+      latest.current.open &&
+      !element.open &&
+      typeof element.showModal === 'function'
+    ) {
+      element.showModal();
+    }
+    return () => {
+      if (element?.open && typeof element.close === 'function') {
+        hidden.current = true;
+        element.close();
+      }
+    };
+  }, []);
+
+  function requestClose(reason: DialogCloseReason) {
     if (!latest.current.open) return;
-    latest.current.onClose?.();
+    latest.current.onClose?.(reason);
   }
+
+  const descriptions = [description ? descriptionId : undefined, describedBy].filter(Boolean);
 
   return (
     <dialog
@@ -81,20 +125,32 @@ export function Dialog({
       id={dialogId}
       className={cx(styles.dialog, styles[size], className)}
       aria-labelledby={titleId}
-      aria-describedby={description ? descriptionId : undefined}
+      aria-describedby={descriptions.length > 0 ? descriptions.join(' ') : undefined}
       onCancel={(event) => {
         event.preventDefault();
-        requestClose();
+        if (!event.cancelable) closeReported.current = true;
+        requestClose('escape');
       }}
       onClose={() => {
+        if (hidden.current) {
+          hidden.current = false;
+          return;
+        }
+        const reported = closeReported.current;
+        closeReported.current = false;
         // Native close events are queued: an earlier close must not undo a later reopen.
         if (!latest.current.open || dialog.current?.open) return;
-        latest.current.onClose?.();
+        // The browser closed it (a method="dialog" form or a close request it would not cancel).
+        if (!reported) latest.current.onClose?.('button');
+        // The parent owns `open`: if it stays true, the effect shows the dialog again.
+        setNativeCloses((count) => count + 1);
       }}
       onKeyDown={(event: ReactKeyboardEvent<HTMLDialogElement>) => {
-        if (event.key === 'Escape') {
+        // An open Menu or a field inside that used Escape keeps the dialog open.
+        if (event.key === 'Escape' && !escapeUsedInside(event)) {
+          // Also keeps the browser from turning the key into its own close request.
           event.preventDefault();
-          requestClose();
+          requestClose('escape');
         }
         rest.onKeyDown?.(event);
       }}
@@ -102,18 +158,21 @@ export function Dialog({
         if (event.target === dialog.current) {
           // Keep the pointer action from moving focus after native close restores it.
           event.preventDefault();
-          requestClose();
+          requestClose('backdrop');
         }
         rest.onPointerDown?.(event);
       }}
     >
       <div className={styles.surface}>
-        <header className={styles['dialog-head']}>
+        <header className={cx(styles['dialog-head'], !description && styles['title-only'])}>
           <div className={styles['dialog-title']}>
             <h2 id={titleId}>{title}</h2>
             {description && <p id={descriptionId}>{description}</p>}
           </div>
-          <IconButton label={closeLabel ?? messages.dialog.close} onClick={requestClose}>
+          <IconButton
+            label={closeLabel ?? messages.dialog.close}
+            onClick={() => requestClose('button')}
+          >
             <X size={16} strokeWidth={1.9} />
           </IconButton>
         </header>
