@@ -1,0 +1,134 @@
+.card {
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-1);
+  box-sizing: border-box;
+  color: var(--fg-2);
+  display: flex;
+  flex-direction: column;
+  font-size: var(--control-font-size-md);
+  min-width: 0;
+  text-align: left;
+}
+
+.floating {
+  box-shadow: var(--shadow-popover);
+  /* Stays inside its frame: below its top edge and above the frame's bottom. */
+  max-height: min(
+    var(--drawing-card-max-height, 640px),
+    calc(100% - var(--drawing-card-y, var(--space-3)) - var(--space-3))
+  );
+  max-width: calc(100% - 2 * var(--space-3));
+  position: absolute;
+  right: var(--space-3);
+  top: var(--drawing-card-y, var(--space-3));
+  z-index: var(--drawing-card-z, 10);
+}
+
+.fromLeft {
+  left: var(--drawing-card-x);
+  right: auto;
+}
+
+.docked {
+  position: relative;
+  width: 100%;
+}
+
+.floating.sm {
+  width: 260px;
+}
+
+.floating.md {
+  width: 320px;
+}
+
+.floating.lg {
+  width: 400px;
+}
+
+.header {
+  align-items: flex-start;
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-2);
+}
+
+.icon {
+  align-items: center;
+  color: var(--fg-3);
+  display: inline-flex;
+  flex: none;
+  height: var(--control-height-sm);
+}
+
+.icon svg {
+  height: 16px;
+  width: 16px;
+}
+
+.heading {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  justify-content: center;
+  min-height: var(--control-height-sm);
+  min-width: 0;
+}
+
+.title {
+  color: var(--fg-1);
+  font-size: 15px;
+  font-weight: var(--fw-semibold);
+  line-height: 1.3;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.subtitle {
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: var(--space-1);
+  margin: 0 calc(-1 * var(--space-1)) 0 0;
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.footer {
+  align-items: center;
+  border-top: 1px solid var(--border-1);
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  padding: var(--space-2) var(--space-3);
+}
+
+/* On a phone a floating card leaves the drawing free and sits at the bottom edge, like a sheet. */
+@media (max-width: 760px) {
+  .floating.dockOnPhone {
+    bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+    left: var(--space-2);
+    max-height: var(--drawing-card-phone-max-height, 45vh);
+    max-width: none;
+    right: var(--space-2);
+    top: auto;
+    width: auto;
+  }
+}

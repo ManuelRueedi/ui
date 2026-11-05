@@ -60,6 +60,8 @@ export const en = {
   menu: { more: 'More options' },
   pageLoading: { label: 'Loading page' },
   toast: { region: 'Notifications', dismiss: 'Dismiss' },
+  chip: { remove: (label: string) => `Remove ${label}` },
+  drawingCard: { close: 'Close' },
   offline: 'Offline',
 };
 
@@ -125,6 +127,8 @@ export const deCH: UiMessages = {
   menu: { more: 'Weitere Optionen' },
   pageLoading: { label: 'Seite wird geladen' },
   toast: { region: 'Mitteilungen', dismiss: 'Mitteilung schliessen' },
+  chip: { remove: (label: string) => `${label} entfernen` },
+  drawingCard: { close: 'Schliessen' },
   offline: 'Offline',
 };
 
@@ -188,6 +192,8 @@ export const frCH: UiMessages = {
   menu: { more: 'Plus d’options' },
   pageLoading: { label: 'Chargement de la page' },
   toast: { region: 'Notifications', dismiss: 'Fermer la notification' },
+  chip: { remove: (label: string) => `Retirer ${label}` },
+  drawingCard: { close: 'Fermer' },
   offline: 'Hors ligne',
 };
 
@@ -251,6 +257,8 @@ export const itCH: UiMessages = {
   menu: { more: 'Altre opzioni' },
   pageLoading: { label: 'Caricamento della pagina' },
   toast: { region: 'Notifiche', dismiss: 'Chiudi la notifica' },
+  chip: { remove: (label: string) => `Rimuovi ${label}` },
+  drawingCard: { close: 'Chiudi' },
   offline: 'Offline',
 };
 

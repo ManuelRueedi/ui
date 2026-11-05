@@ -46,7 +46,8 @@ export function App() {
 
 ## Components
 
-Avatar, Badge, Button, Card, Checkbox, Collapsible, Dialog, EditableSelect, Field, IconButton,
+Avatar, Badge, Button, Card, Checkbox, Chip (with `ChipGroup`), Collapsible, Dialog, DrawingCard,
+EditableSelect, Field, IconButton,
 Input, Menu, NavItem, PageLoading, SearchableSelect, SegmentControl, Select, Sheet, Sidebar,
 Textarea, Toast (with `Toaster`, `useToast` and `useOptionalToast`) and Tooltip, plus the `useSpotlight` hook for the
 hover light on custom surfaces. Storybook shows every state in light and dark mode; its toolbar
