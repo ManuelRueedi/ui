@@ -66,6 +66,22 @@
   margin-left: 2px;
 }
 
+/* Interactive chips. Declared before the tones and dashed, so a toned or dashed button keeps its look. */
+.interactive {
+  background: var(--bg-1);
+  border-color: var(--border-2);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.dashed {
+  border-style: dashed;
+  border-color: var(--fg-4);
+}
+
 .strong {
   background: var(--bg-4);
   border-color: var(--border-2);
@@ -89,22 +105,6 @@
   color: inherit;
 }
 
-.dashed {
-  border-style: dashed;
-  border-color: var(--fg-4);
-}
-
-/* Interactive chips. */
-.interactive {
-  background: var(--bg-1);
-  border-color: var(--border-2);
-  cursor: pointer;
-  transition:
-    color var(--dur-fast) var(--ease-out),
-    background-color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-}
-
 button.chip:focus-visible,
 .part:focus-visible,
 .remove:focus-visible {
@@ -117,6 +117,19 @@ button.chip:focus-visible,
   .removable.interactive:hover:not(.disabled) {
     border-color: var(--fg-3);
     color: var(--fg-1);
+  }
+
+  /* Toned chips keep their colours on hover; only the border darkens. */
+  button.interactive.warning:hover:not(:disabled),
+  .removable.interactive.warning:hover:not(.disabled) {
+    border-color: var(--warning);
+    color: var(--warning);
+  }
+
+  button.interactive.error:hover:not(:disabled),
+  .removable.interactive.error:hover:not(.disabled) {
+    border-color: var(--error);
+    color: var(--error);
   }
 }
 

@@ -143,8 +143,14 @@ export const ActionChips: Story = {
       <Chip onClick={args.onClick}>Connect to</Chip>
       <Chip onClick={args.onClick}>Show in schematic</Chip>
       <Chip onClick={args.onClick}>Move to</Chip>
-      <Chip onClick={args.onClick} disabled>
+      <Chip onClick={args.onClick} dashed>
+        Opening O3
+      </Chip>
+      <Chip onClick={args.onClick} tone="error">
         Delete
+      </Chip>
+      <Chip onClick={args.onClick} tone="warning" disabled>
+        Check feed
       </Chip>
     </ChipGroup>
   ),
@@ -152,8 +158,17 @@ export const ActionChips: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'Move to' }));
     await expect(args.onClick).toHaveBeenCalledOnce();
-    await userEvent.click(canvas.getByRole('button', { name: 'Delete' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Check feed' }));
     await expect(args.onClick).toHaveBeenCalledOnce();
+
+    // A toned or dashed button keeps its tone and dashed border.
+    const plain = getComputedStyle(canvas.getByRole('button', { name: 'Move to' }));
+    const danger = getComputedStyle(canvas.getByRole('button', { name: 'Delete' }));
+    const dashed = getComputedStyle(canvas.getByRole('button', { name: 'Opening O3' }));
+    await expect(danger.backgroundColor).not.toBe(plain.backgroundColor);
+    await expect(danger.color).not.toBe(plain.color);
+    await expect(dashed.borderTopStyle).toBe('dashed');
+    await expect(dashed.borderTopColor).not.toBe(plain.borderTopColor);
     // Not toggles: no pressed state.
     await expect(canvas.getByRole('button', { name: 'Move to' })).not.toHaveAttribute(
       'aria-pressed',
